@@ -1,0 +1,37 @@
+# VS Code
+.vscode/settings.json
+
+# Python VirtualEnv
+.venv/
+
+# notebooks
+/notebooks/
+
+# Jetbrains IDE
+.idea/
+.run/
+
+# Visual Studio Code
+.vscode/
+
+# Mypy
+.mypy_cache/
+
+# pytest
+.pytest_cache/
+__pycache__/
+
+# misc
+dump/
+
+/node_modules
+.env
+
+# mac finder
+.DS_Store
+
+/htmlcov
+
+/.ruff_cache
+
+.coverage
