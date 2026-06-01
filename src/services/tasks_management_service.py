@@ -26,10 +26,12 @@ class TasksManagementService:
         jobs_repo: JobsRepository,
         broker: Celery,
         chain_expires_seconds: int = 3600,
+        event_driven_dispatch: bool = False,
     ):
         self._jobs_repo = jobs_repo
         self._broker = broker
         self._chain_expires_seconds = chain_expires_seconds
+        self._event_driven_dispatch = event_driven_dispatch
 
     def create_job(self, scope_id: str, task_specs: list[TaskSpecification]) -> None:
         self._jobs_repo.create_job(scope_id=scope_id, task_specs=task_specs)
@@ -50,12 +52,21 @@ class TasksManagementService:
         return result
 
     def send_to_queue(self, result: OperationResult, user: str) -> None:
+        if self._event_driven_dispatch:
+            self._send_event_driven(result, user)
+        else:
+            self._send_to_canvas(result, user)
+
+    def _send_to_canvas(self, result: OperationResult, user: str) -> None:
         from typing import cast
 
         from src.services.make_task_graph import SequentialTasks
 
         builder = CeleryChainBuilder(result.updated_job, user, self._chain_expires_seconds, self._broker)
         builder.make_celery_chain(cast(SequentialTasks, result.task_graph)).apply_async()
+
+    def _send_event_driven(self, result: OperationResult, user: str) -> None:
+        pass
 
     def start_task(self, scope_id: str, task_id: TaskSpecificationId, launch_id: UUID) -> ScopedJobInterface:
         job = self._require_job_for_update(scope_id)
