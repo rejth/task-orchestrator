@@ -55,10 +55,10 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 3: Schedule the periodic sweep
 
-- [ ] Register a Celery-beat periodic task that runs the sweep on an interval
-- [ ] Wire the periodic task to the selection query and re-enqueue path
-- [ ] write tests for the periodic sweep wiring
-- [ ] run project tests - must pass before next task
+- [x] Register a Celery-beat periodic task that runs the sweep on an interval
+- [x] Wire the periodic task to the selection query and re-enqueue path
+- [x] write tests for the periodic sweep wiring
+- [x] run project tests - must pass before next task
 
 ### Task 4: Verify acceptance criteria
 
