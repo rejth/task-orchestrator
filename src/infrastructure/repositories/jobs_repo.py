@@ -301,14 +301,13 @@ class SQLJobsRepository:
             self._session.flush()
 
     def list_all(self) -> list[ScopedJobInterface]:
-        launch_with_journal = selectinload(TaskLaunchModel.journal)
         models = (
             self._session.query(JobModel)
+            .filter(JobModel.tasks.any(ScopedTaskModel.status == ScopedTaskStatus.PENDING))
             .options(
                 selectinload(JobModel.tasks).options(
-                    selectinload(ScopedTaskModel.current_launch).options(launch_with_journal),
-                    selectinload(ScopedTaskModel.latest_launch).options(launch_with_journal),
-                    selectinload(ScopedTaskModel.launch_history).options(launch_with_journal),
+                    selectinload(ScopedTaskModel.current_launch),
+                    selectinload(ScopedTaskModel.latest_launch),
                 )
             )
             .all()

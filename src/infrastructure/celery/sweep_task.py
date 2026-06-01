@@ -19,6 +19,9 @@ celery_app = get_celery_app()
 @celery_app.task(name=SWEEP_TASK_NAME)
 def reconciliation_sweep() -> None:
     settings = get_settings()
+    if not settings.EVENT_DRIVEN_DISPATCH:
+        logger.debug("Reconciliation sweep skipped: EVENT_DRIVEN_DISPATCH is disabled")
+        return
     SessionLocal = get_session_factory()
 
     with SessionLocal() as session:

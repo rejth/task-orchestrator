@@ -14,8 +14,12 @@ def sweep_mocks():
     mock_session.__exit__ = MagicMock(return_value=False)
     mock_session_factory = MagicMock(return_value=mock_session)
     MockService = MagicMock(return_value=mock_service)
+    mock_settings = MagicMock()
+    mock_settings.EVENT_DRIVEN_DISPATCH = True
+    mock_settings.CELERY_TASK_CHAIN_EXPIRES = 3600
 
     with (
+        patch("src.infrastructure.celery.sweep_task.get_settings", return_value=mock_settings),
         patch("src.infrastructure.celery.sweep_task.get_session_factory", return_value=mock_session_factory),
         patch("src.infrastructure.celery.sweep_task.SQLJobsRepository"),
         patch("src.infrastructure.celery.sweep_task.TaskDispatcher"),
@@ -44,6 +48,17 @@ def test_beat_schedule_interval_matches_settings():
     app = get_celery_app()
     entry = app.conf.beat_schedule["reconciliation-sweep"]
     assert entry["schedule"] == settings.RECONCILIATION_SWEEP_INTERVAL_SECONDS
+
+
+def test_sweep_task_skips_when_event_driven_disabled():
+    mock_settings = MagicMock()
+    mock_settings.EVENT_DRIVEN_DISPATCH = False
+    with (
+        patch("src.infrastructure.celery.sweep_task.get_settings", return_value=mock_settings),
+        patch("src.infrastructure.celery.sweep_task.get_session_factory") as mock_factory,
+    ):
+        reconciliation_sweep()
+        mock_factory.assert_not_called()
 
 
 def test_sweep_task_calls_service_sweep(sweep_mocks):
