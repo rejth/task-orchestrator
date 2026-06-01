@@ -57,10 +57,10 @@ Behavior matrix to encode:
 
 ### Task 1: Tracer bullet — root of a linear Job
 
-- [ ] Red: write a failing test asserting a freshly scheduled linear Job returns only the root as dispatchable, not its pending successors
-- [ ] Green: implement `dispatchable_tasks()` minimally to pass
-- [ ] write tests for new functionality
-- [ ] run project tests - must pass before next task
+- [x] Red: write a failing test asserting a freshly scheduled linear Job returns only the root as dispatchable, not its pending successors
+- [x] Green: implement `dispatchable_tasks()` minimally to pass
+- [x] write tests for new functionality
+- [x] run project tests - must pass before next task
 
 ### Task 2: Predecessor satisfaction rules
 

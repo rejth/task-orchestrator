@@ -132,3 +132,16 @@ def test_fail_with_wrong_launch_id_raises():
     updated_job, started = updated_job.start(root.spec_id, root.current_launch.id, "s", AT)
     with pytest.raises(LaunchNotFound):
         updated_job.fail(task_id=root.spec_id, launch_id=uuid4(), message="err", at=AT, is_aborted=False)
+
+
+# ── dispatchable_tasks ────────────────────────────────────────────────────────
+
+def test_dispatchable_tasks_linear_job_returns_only_root():
+    job = make_fresh_job()
+    scheduled = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY)
+    updated_job = scheduled.updated_job
+
+    dispatchable = updated_job.dispatchable_tasks()
+
+    assert len(dispatchable) == 1
+    assert dispatchable[0].spec_id == T.RELOAD_PATIENT_DATA
