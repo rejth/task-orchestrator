@@ -1,20 +1,18 @@
 """Unit tests for ReconciliationSweepService stalled-task selection query."""
 from dataclasses import dataclass
 from unittest.mock import MagicMock
-from uuid import uuid4
-
-import pytest
+from uuid import UUID, uuid4
 
 from src.domain.job import ScopedJob
 from src.domain.launch import (
-    FailMetadata,
     FailedLaunch,
+    FailMetadata,
     ProgressMetadata,
-    ScheduleMetadata,
     ScheduledLaunch,
+    ScheduleMetadata,
     StartedLaunch,
-    SuccessMetadata,
     SuccessfullyFinishedLaunch,
+    SuccessMetadata,
 )
 from src.domain.scoped_task import (
     FailedScopedTask,
@@ -53,7 +51,7 @@ def _make_job(scope_id: str, tasks: list) -> ScopedJob:
     return ScopedJob(id=uuid4(), scope=FakeScope(scope_id), tasks=tasks)
 
 
-def _scheduled_task(spec, launch_id=None):
+def _scheduled_task(spec, launch_id: UUID | None = None) -> ScheduledScopedTask:
     task_id = uuid4()
     lid = launch_id or uuid4()
     return ScheduledScopedTask(
@@ -71,7 +69,7 @@ def _scheduled_task(spec, launch_id=None):
     )
 
 
-def _success_task(spec):
+def _success_task(spec) -> SuccessfullyFinishedScopedTask:
     task_id = uuid4()
     lid = uuid4()
     return SuccessfullyFinishedScopedTask(
@@ -91,7 +89,7 @@ def _success_task(spec):
     )
 
 
-def _failed_task(spec, is_aborted: bool = False):
+def _failed_task(spec, is_aborted: bool = False) -> FailedScopedTask:
     task_id = uuid4()
     lid = uuid4()
     return FailedScopedTask(
@@ -115,7 +113,7 @@ def _failed_task(spec, is_aborted: bool = False):
     )
 
 
-def _started_task(spec):
+def _started_task(spec) -> StartedScopedTask:
     task_id = uuid4()
     lid = uuid4()
     return StartedScopedTask(
