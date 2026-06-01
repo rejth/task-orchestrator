@@ -1,3 +1,4 @@
+import datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -65,13 +66,32 @@ def test_each_signature_has_expiry(dispatcher):
     task = make_scheduled_task(spec)
 
     captured_kwargs: list[dict] = []
+    before = datetime.datetime.now(datetime.timezone.utc)
 
     with patch("src.services.task_dispatcher.Signature") as MockSig:
         MockSig.side_effect = lambda *a, **kw: (captured_kwargs.append(kw), MagicMock())[1]
 
         dispatcher.dispatch([task], scope_id=SCOPE_ID, user=USER)
 
-    assert captured_kwargs[0]["expires"] is not None
+    expires = captured_kwargs[0]["expires"]
+    assert isinstance(expires, datetime.datetime)
+    assert expires > before
+    assert expires <= before + datetime.timedelta(seconds=3600 + 1)
+
+
+def test_signature_args_match_task(dispatcher):
+    launch_id = uuid4()
+    spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
+    task = make_scheduled_task(spec, launch_id=launch_id)
+
+    captured_args: list[tuple] = []
+
+    with patch("src.services.task_dispatcher.Signature") as MockSig:
+        MockSig.side_effect = lambda *a, **kw: (captured_args.append(kw.get("args", ())), MagicMock())[1]
+
+        dispatcher.dispatch([task], scope_id=SCOPE_ID, user=USER)
+
+    assert captured_args[0] == (SCOPE_ID, spec.id.value, str(launch_id), USER)
 
 
 def test_empty_task_list_enqueues_nothing(dispatcher):
