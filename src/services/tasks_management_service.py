@@ -7,7 +7,13 @@ from celery import Celery
 from src.domain.job import OperationResult, ScopedJobInterface
 from src.domain.jobs_repo import JobsRepository
 from src.domain.journal import FileLogRecord, LaunchLogRecord, Log
-from src.domain.scoped_task import ScopedTask
+from src.domain.scoped_task import (
+    NewScopedTask,
+    ScheduledScopedTask,
+    ScopedTask,
+    SkippedScopedTask,
+    SuccessfullyFinishedScopedTask,
+)
 from src.domain.task import TaskSpecification, TaskSpecificationId
 from src.services.make_celery_chain import CeleryChainBuilder
 from src.services.task_dispatcher import TaskDispatcher
@@ -84,7 +90,13 @@ class TasksManagementService:
         self._jobs_repo.update_task(task=started_task)
         return updated_job
 
-    def finish_task(self, scope_id: str, task_id: TaskSpecificationId, launch_id: UUID) -> ScopedJobInterface:
+    def finish_task(
+        self,
+        scope_id: str,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        user: str = "",
+    ) -> tuple[ScopedJobInterface, list[ScheduledScopedTask]]:
         job = self._require_job_for_update(scope_id)
         updated_job, finished_task = job.success(
             task_id=task_id,
@@ -93,7 +105,8 @@ class TasksManagementService:
             at=datetime.datetime.now(),
         )
         self._jobs_repo.update_task(task=finished_task)
-        return updated_job
+        successors = self._schedule_unblocked_successors(updated_job, user) if self._event_driven_dispatch else []
+        return updated_job, successors
 
     def abort_task(
         self,
@@ -113,7 +126,13 @@ class TasksManagementService:
         self._jobs_repo.update(job=updated_job)
         return updated_job
 
-    def skip_task(self, scope_id: str, task_id: TaskSpecificationId, launch_id: UUID) -> ScopedJobInterface:
+    def skip_task(
+        self,
+        scope_id: str,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        user: str = "",
+    ) -> tuple[ScopedJobInterface, list[ScheduledScopedTask]]:
         job = self._require_job_for_update(scope_id)
         updated_job, skipped_task = job.skip(
             task_id=task_id,
@@ -122,7 +141,35 @@ class TasksManagementService:
             at=datetime.datetime.now(),
         )
         self._jobs_repo.update_task(task=skipped_task)
-        return updated_job
+        successors = self._schedule_unblocked_successors(updated_job, user) if self._event_driven_dispatch else []
+        return updated_job, successors
+
+    def dispatch_successors(self, successors: list[ScheduledScopedTask], scope_id: str, user: str) -> None:
+        if successors:
+            self._dispatcher.dispatch(tasks=successors, scope_id=scope_id, user=user)
+
+    def _schedule_unblocked_successors(
+        self, updated_job: ScopedJobInterface, user: str
+    ) -> list[ScheduledScopedTask]:
+        task_by_id = {t.spec_id: t for t in updated_job.get_tasks()}
+        now = datetime.datetime.now()
+        scheduled = []
+        for task in updated_job.get_tasks():
+            if not isinstance(task, NewScopedTask):
+                continue
+            if all(
+                isinstance(task_by_id.get(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
+                for pred_id in task.specification.depends_on
+            ):
+                successor = task.schedule(
+                    launch_id=uuid4(),
+                    message="Dispatched by event-driven path",
+                    at=now,
+                    by=user,
+                )
+                self._jobs_repo.update_task(task=successor)
+                scheduled.append(successor)
+        return scheduled
 
     def update_journal(
         self,

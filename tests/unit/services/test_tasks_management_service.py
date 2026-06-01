@@ -1,11 +1,14 @@
 """Unit tests for TasksManagementService feature-flag routing."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
+from uuid import uuid4
 
 import pytest
 
+from src.domain.job import ScopedJob
+from src.domain.scoped_task import NewScopedTask, ScheduledScopedTask
 from src.domain.task import TaskSpecificationId
 from src.services.tasks_management_service import TasksManagementService
-from tests.unit.domain.conftest import make_scheduled_task, make_spec
+from tests.unit.domain.conftest import AT, JOB_ID, make_new_task, make_scheduled_task, make_spec
 
 
 @pytest.fixture
@@ -126,4 +129,108 @@ def test_canvas_path_does_not_use_dispatcher(jobs_repo, broker, operation_result
     svc = _make_service(jobs_repo, broker, event_driven=False, task_dispatcher=mock_dispatcher)
     with patch.object(svc, "_send_to_canvas"):
         svc.send_to_queue(result=operation_result, user=USER)
+    mock_dispatcher.dispatch.assert_not_called()
+
+
+# --- Task 3: dispatch successors on success and skip ---
+
+T = TaskSpecificationId
+
+
+def _make_started_task(spec):
+    return make_scheduled_task(spec).start(message="started", at=AT)
+
+
+def _make_job_with_tasks(tasks):
+    scope = MagicMock()
+    scope.get_id.return_value = SCOPE_ID
+    return ScopedJob(id=JOB_ID, scope=scope, tasks=tasks)
+
+
+def test_finish_task_event_driven_schedules_and_dispatches_successor(jobs_repo, broker):
+    spec_a = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    started_a = _make_started_task(spec_a)
+    new_b = make_new_task(spec_b)
+    job = _make_job_with_tasks([started_a, new_b])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.finish_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+
+    assert len(successors) == 1
+    assert successors[0].spec_id == T.RELOAD_SOMATIC_MUTATIONS
+    assert isinstance(successors[0], ScheduledScopedTask)
+    assert jobs_repo.update_task.call_count == 2
+
+    svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
+    mock_dispatcher.dispatch.assert_called_once_with(tasks=successors, scope_id=SCOPE_ID, user=USER)
+
+
+def test_skip_task_event_driven_schedules_and_dispatches_successor(jobs_repo, broker):
+    spec_a = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    started_a = _make_started_task(spec_a)
+    new_b = make_new_task(spec_b)
+    job = _make_job_with_tasks([started_a, new_b])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.skip_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+
+    assert len(successors) == 1
+    assert successors[0].spec_id == T.RELOAD_SOMATIC_MUTATIONS
+    assert isinstance(successors[0], ScheduledScopedTask)
+
+    svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
+    mock_dispatcher.dispatch.assert_called_once_with(tasks=successors, scope_id=SCOPE_ID, user=USER)
+
+
+def test_finish_task_canvas_no_successor_dispatch(jobs_repo, broker):
+    spec_a = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    started_a = _make_started_task(spec_a)
+    new_b = make_new_task(spec_b)
+    job = _make_job_with_tasks([started_a, new_b])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=False, task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.finish_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+
+    assert successors == []
+    assert jobs_repo.update_task.call_count == 1
+    svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
+    mock_dispatcher.dispatch.assert_not_called()
+
+
+def test_finish_task_event_driven_fan_in_not_ready(jobs_repo, broker):
+    spec_a = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS)
+    spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])
+    started_a = _make_started_task(spec_a)
+    started_b = _make_started_task(spec_b)
+    new_c = make_new_task(spec_c)
+    job = _make_job_with_tasks([started_a, started_b, new_c])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.finish_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+
+    assert successors == []
+    svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
+    mock_dispatcher.dispatch.assert_not_called()
+
+
+def test_dispatch_successors_empty_list_is_noop(jobs_repo, broker):
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
+    svc.dispatch_successors(successors=[], scope_id=SCOPE_ID, user=USER)
     mock_dispatcher.dispatch.assert_not_called()

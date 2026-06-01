@@ -62,11 +62,11 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 3: Dispatch successors on success and skip
 
-- [ ] On a Task reaching Success, compute now-runnable successors and dispatch them
-- [ ] On a Task being Skipped, compute now-runnable successors and dispatch them
-- [ ] Compute readiness and transition successors to PENDING under the per-Job FOR UPDATE lock; enqueue post-commit
-- [ ] write tests for success and skip dispatch
-- [ ] run project tests - must pass before next task
+- [x] On a Task reaching Success, compute now-runnable successors and dispatch them
+- [x] On a Task being Skipped, compute now-runnable successors and dispatch them
+- [x] Compute readiness and transition successors to PENDING under the per-Job FOR UPDATE lock; enqueue post-commit
+- [x] write tests for success and skip dispatch
+- [x] run project tests - must pass before next task
 
 ### Task 4: Block downstream on failure and ensure exactly-once fan-in
 
