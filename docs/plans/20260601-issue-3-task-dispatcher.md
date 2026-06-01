@@ -52,9 +52,9 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 2: Confirm idempotent duplicate enqueue
 
-- [ ] Ensure a duplicate enqueue of the same Launch id is a no-op via the existing Launch-id guard
-- [ ] write tests asserting the enqueued set and idempotency key without asserting Celery internals
-- [ ] run project tests - must pass before next task
+- [x] Ensure a duplicate enqueue of the same Launch id is a no-op via the existing Launch-id guard
+- [x] write tests asserting the enqueued set and idempotency key without asserting Celery internals
+- [x] run project tests - must pass before next task
 
 ### Task 3: Verify acceptance criteria
 
