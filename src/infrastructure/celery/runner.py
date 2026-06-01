@@ -44,10 +44,18 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
 
     SessionLocal = get_session_factory()
 
+    from src.api.config import get_settings
+
+    settings = get_settings()
+
     with SessionLocal() as session:
         try:
             jobs_repo = SQLJobsRepository(session=session)
-            service = TasksManagementService(jobs_repo=jobs_repo, broker=celery_app)
+            service = TasksManagementService(
+                jobs_repo=jobs_repo,
+                broker=celery_app,
+                event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
+            )
 
             try:
                 service.start_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
@@ -59,16 +67,22 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
             if logs:
                 service.update_journal(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, logs=logs)
 
+            successors = []
             match status:
                 case TaskHandleStatus.SUCCESS:
-                    service.finish_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
+                    _, successors = service.finish_task(
+                        scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, user=user
+                    )
                 case TaskHandleStatus.SKIP:
-                    service.skip_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
+                    _, successors = service.skip_task(
+                        scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, user=user
+                    )
                 case TaskHandleStatus.FAIL:
                     service.abort_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=False)
                     raise TaskExecutionError(task_id=task_id, scope_id=scope_id, launch_id=launch_id)
 
             session.commit()
+            service.dispatch_successors(successors=successors, scope_id=scope_id, user=user)
         except TaskExecutionError:
             session.rollback()
             raise
