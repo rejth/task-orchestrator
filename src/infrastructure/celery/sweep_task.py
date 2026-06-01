@@ -32,7 +32,10 @@ def reconciliation_sweep() -> None:
             dispatcher=dispatcher,
             system_user="system@sweep",
         )
-        service.sweep()
-        session.commit()
+        try:
+            service.sweep()
+        except Exception:
+            logger.exception("Reconciliation sweep failed")
+            raise
 
     logger.info("Reconciliation sweep completed")
