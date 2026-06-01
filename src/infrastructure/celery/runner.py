@@ -54,6 +54,7 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
             service = TasksManagementService(
                 jobs_repo=jobs_repo,
                 broker=celery_app,
+                chain_expires_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
                 event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
             )
 
