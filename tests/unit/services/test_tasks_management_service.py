@@ -1,11 +1,10 @@
 """Unit tests for TasksManagementService feature-flag routing."""
-from unittest.mock import MagicMock, call, patch
-from uuid import uuid4
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.domain.job import ScopedJob
-from src.domain.scoped_task import NewScopedTask, ScheduledScopedTask
+from src.domain.scoped_task import ScheduledScopedTask, StartedScopedTask, SuccessfullyFinishedScopedTask
 from src.domain.task import TaskSpecificationId
 from src.services.tasks_management_service import TasksManagementService
 from tests.unit.domain.conftest import AT, JOB_ID, make_new_task, make_scheduled_task, make_spec
@@ -73,7 +72,7 @@ SCOPE_ID = "patient-abc"
 USER = "svc@example.com"
 
 
-def _make_job_stub(scope_id: str, dispatchable):
+def _make_job_stub(scope_id: str, dispatchable) -> MagicMock:
     scope = MagicMock()
     scope.get_id.return_value = scope_id
     job = MagicMock()
@@ -137,11 +136,11 @@ def test_canvas_path_does_not_use_dispatcher(jobs_repo, broker, operation_result
 T = TaskSpecificationId
 
 
-def _make_started_task(spec):
+def _make_started_task(spec) -> StartedScopedTask:
     return make_scheduled_task(spec).start(message="started", at=AT)
 
 
-def _make_job_with_tasks(tasks):
+def _make_job_with_tasks(tasks) -> ScopedJob:
     scope = MagicMock()
     scope.get_id.return_value = SCOPE_ID
     return ScopedJob(id=JOB_ID, scope=scope, tasks=tasks)
@@ -238,7 +237,7 @@ def test_dispatch_successors_empty_list_is_noop(jobs_repo, broker):
 
 # --- Task 4: failure dispatches nothing; exactly-once fan-in ---
 
-def _make_finished_task(spec):
+def _make_finished_task(spec) -> SuccessfullyFinishedScopedTask:
     return _make_started_task(spec).finish(message="finished", at=AT)
 
 

@@ -77,11 +77,11 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify the flag selects old-canvas vs new path, default old
-- [ ] verify schedule dispatches only the ready frontier
-- [ ] verify success and skip dispatch now-runnable successors; failure dispatches nothing downstream
-- [ ] verify readiness + PENDING transition occur under the lock and enqueue is post-commit
-- [ ] verify concurrent fan-in dispatches the successor exactly once
-- [ ] verify front-end per-Task/per-Launch status and API contract are unchanged
-- [ ] run full project test suite
-- [ ] run project linter - all issues must be fixed
+- [x] verify the flag selects old-canvas vs new path, default old
+- [x] verify schedule dispatches only the ready frontier
+- [x] verify success and skip dispatch now-runnable successors; failure dispatches nothing downstream
+- [x] verify readiness + PENDING transition occur under the lock and enqueue is post-commit
+- [x] verify concurrent fan-in dispatches the successor exactly once
+- [x] verify front-end per-Task/per-Launch status and API contract are unchanged
+- [x] run full project test suite
+- [x] run project linter - all issues must be fixed
