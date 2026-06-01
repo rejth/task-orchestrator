@@ -55,10 +55,10 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 2: Dispatch the ready frontier on schedule
 
-- [ ] On scheduling a Job, compute the ready frontier via the readiness query and dispatch only those Tasks
-- [ ] Transition dispatched Tasks to PENDING inside the per-Job locked transaction; enqueue post-commit
-- [ ] write tests for new functionality
-- [ ] run project tests - must pass before next task
+- [x] On scheduling a Job, compute the ready frontier via the readiness query and dispatch only those Tasks
+- [x] Transition dispatched Tasks to PENDING inside the per-Job locked transaction; enqueue post-commit
+- [x] write tests for new functionality
+- [x] run project tests - must pass before next task
 
 ### Task 3: Dispatch successors on success and skip
 

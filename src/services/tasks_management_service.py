@@ -10,6 +10,7 @@ from src.domain.journal import FileLogRecord, LaunchLogRecord, Log
 from src.domain.scoped_task import ScopedTask
 from src.domain.task import TaskSpecification, TaskSpecificationId
 from src.services.make_celery_chain import CeleryChainBuilder
+from src.services.task_dispatcher import TaskDispatcher
 
 
 class JobNotFound(ValueError):
@@ -27,11 +28,13 @@ class TasksManagementService:
         broker: Celery,
         chain_expires_seconds: int = 3600,
         event_driven_dispatch: bool = False,
+        task_dispatcher: TaskDispatcher | None = None,
     ):
         self._jobs_repo = jobs_repo
         self._broker = broker
         self._chain_expires_seconds = chain_expires_seconds
         self._event_driven_dispatch = event_driven_dispatch
+        self._dispatcher = task_dispatcher or TaskDispatcher(broker=broker, expiry_seconds=chain_expires_seconds)
 
     def create_job(self, scope_id: str, task_specs: list[TaskSpecification]) -> None:
         self._jobs_repo.create_job(scope_id=scope_id, task_specs=task_specs)
@@ -66,7 +69,9 @@ class TasksManagementService:
         builder.make_celery_chain(cast(SequentialTasks, result.task_graph)).apply_async()
 
     def _send_event_driven(self, result: OperationResult, user: str) -> None:
-        pass
+        tasks = result.updated_job.dispatchable_tasks()
+        scope_id = result.updated_job.get_scope().get_id()
+        self._dispatcher.dispatch(tasks=tasks, scope_id=scope_id, user=user)
 
     def start_task(self, scope_id: str, task_id: TaskSpecificationId, launch_id: UUID) -> ScopedJobInterface:
         job = self._require_job_for_update(scope_id)
