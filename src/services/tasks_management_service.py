@@ -8,7 +8,6 @@ from src.domain.job import OperationResult, ScopedJobInterface
 from src.domain.jobs_repo import JobsRepository
 from src.domain.journal import FileLogRecord, LaunchLogRecord, Log
 from src.domain.scoped_task import (
-    NewScopedTask,
     ScheduledScopedTask,
     ScopedTask,
     SkippedScopedTask,
@@ -105,7 +104,9 @@ class TasksManagementService:
             at=datetime.datetime.now(),
         )
         self._jobs_repo.update_task(task=finished_task)
-        successors = self._schedule_unblocked_successors(updated_job, user) if self._event_driven_dispatch else []
+        successors = (
+            self._schedule_unblocked_successors(updated_job, user, task_id) if self._event_driven_dispatch else []
+        )
         return updated_job, successors
 
     def abort_task(
@@ -141,7 +142,9 @@ class TasksManagementService:
             at=datetime.datetime.now(),
         )
         self._jobs_repo.update_task(task=skipped_task)
-        successors = self._schedule_unblocked_successors(updated_job, user) if self._event_driven_dispatch else []
+        successors = (
+            self._schedule_unblocked_successors(updated_job, user, task_id) if self._event_driven_dispatch else []
+        )
         return updated_job, successors
 
     def dispatch_successors(self, successors: list[ScheduledScopedTask], scope_id: str, user: str) -> None:
@@ -149,26 +152,20 @@ class TasksManagementService:
             self._dispatcher.dispatch(tasks=successors, scope_id=scope_id, user=user)
 
     def _schedule_unblocked_successors(
-        self, updated_job: ScopedJobInterface, user: str
+        self, updated_job: ScopedJobInterface, user: str, completed_task_id: TaskSpecificationId
     ) -> list[ScheduledScopedTask]:
         task_by_id = {t.spec_id: t for t in updated_job.get_tasks()}
-        now = datetime.datetime.now()
         scheduled = []
         for task in updated_job.get_tasks():
-            if not isinstance(task, NewScopedTask):
+            if not isinstance(task, ScheduledScopedTask):
                 continue
-            if task.specification.depends_on and all(
+            if completed_task_id not in task.specification.depends_on:
+                continue
+            if all(
                 isinstance(task_by_id.get(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
                 for pred_id in task.specification.depends_on
             ):
-                successor = task.schedule(
-                    launch_id=uuid4(),
-                    message="Dispatched by event-driven path",
-                    at=now,
-                    by=user,
-                )
-                self._jobs_repo.update_task(task=successor)
-                scheduled.append(successor)
+                scheduled.append(task)
         return scheduled
 
     def update_journal(

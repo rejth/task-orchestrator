@@ -7,7 +7,7 @@ from src.domain.job import ScopedJob
 from src.domain.scoped_task import ScheduledScopedTask, StartedScopedTask, SuccessfullyFinishedScopedTask
 from src.domain.task import TaskSpecificationId
 from src.services.tasks_management_service import TasksManagementService
-from tests.unit.domain.conftest import AT, JOB_ID, make_new_task, make_scheduled_task, make_spec
+from tests.unit.domain.conftest import AT, JOB_ID, make_scheduled_task, make_spec
 
 
 @pytest.fixture
@@ -150,8 +150,8 @@ def test_finish_task_event_driven_schedules_and_dispatches_successor(jobs_repo, 
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
-    new_b = make_new_task(spec_b)
-    job = _make_job_with_tasks([started_a, new_b])
+    scheduled_b = make_scheduled_task(spec_b)
+    job = _make_job_with_tasks([started_a, scheduled_b])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -162,7 +162,7 @@ def test_finish_task_event_driven_schedules_and_dispatches_successor(jobs_repo, 
     assert len(successors) == 1
     assert successors[0].spec_id == T.RELOAD_SOMATIC_MUTATIONS
     assert isinstance(successors[0], ScheduledScopedTask)
-    assert jobs_repo.update_task.call_count == 2
+    assert jobs_repo.update_task.call_count == 1
 
     svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
     mock_dispatcher.dispatch.assert_called_once_with(tasks=successors, scope_id=SCOPE_ID, user=USER)
@@ -172,8 +172,8 @@ def test_skip_task_event_driven_schedules_and_dispatches_successor(jobs_repo, br
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
-    new_b = make_new_task(spec_b)
-    job = _make_job_with_tasks([started_a, new_b])
+    scheduled_b = make_scheduled_task(spec_b)
+    job = _make_job_with_tasks([started_a, scheduled_b])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -193,8 +193,8 @@ def test_skip_task_canvas_no_successor_dispatch(jobs_repo, broker):
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
-    new_b = make_new_task(spec_b)
-    job = _make_job_with_tasks([started_a, new_b])
+    scheduled_b = make_scheduled_task(spec_b)
+    job = _make_job_with_tasks([started_a, scheduled_b])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -212,8 +212,8 @@ def test_finish_task_canvas_no_successor_dispatch(jobs_repo, broker):
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
-    new_b = make_new_task(spec_b)
-    job = _make_job_with_tasks([started_a, new_b])
+    scheduled_b = make_scheduled_task(spec_b)
+    job = _make_job_with_tasks([started_a, scheduled_b])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -233,8 +233,8 @@ def test_finish_task_event_driven_fan_in_not_ready(jobs_repo, broker):
     spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])
     started_a = _make_started_task(spec_a)
     started_b = _make_started_task(spec_b)
-    new_c = make_new_task(spec_c)
-    job = _make_job_with_tasks([started_a, started_b, new_c])
+    scheduled_c = make_scheduled_task(spec_c)
+    job = _make_job_with_tasks([started_a, started_b, scheduled_c])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -264,8 +264,8 @@ def test_abort_task_event_driven_dispatches_nothing_downstream(jobs_repo, broker
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
-    new_b = make_new_task(spec_b)
-    job = _make_job_with_tasks([started_a, new_b])
+    scheduled_b = make_scheduled_task(spec_b)
+    job = _make_job_with_tasks([started_a, scheduled_b])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -287,8 +287,8 @@ def test_fan_in_last_predecessor_completes_dispatches_successor(jobs_repo, broke
     spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])
     finished_a = _make_finished_task(spec_a)
     started_b = _make_started_task(spec_b)
-    new_c = make_new_task(spec_c)
-    job = _make_job_with_tasks([finished_a, started_b, new_c])
+    scheduled_c = make_scheduled_task(spec_c)
+    job = _make_job_with_tasks([finished_a, started_b, scheduled_c])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -308,16 +308,15 @@ def test_fan_in_last_predecessor_completes_dispatches_successor(jobs_repo, broke
     mock_dispatcher.dispatch.assert_called_once_with(tasks=successors, scope_id=SCOPE_ID, user=USER)
 
 
-def test_successor_already_scheduled_is_not_rescheduled(jobs_repo, broker):
-    """Successor already in PENDING state is not rescheduled — the state-machine filter on NewScopedTask prevents double-dispatch."""
+def test_parallel_branch_completion_does_not_redispatch_already_eligible_successor(jobs_repo, broker):
+    """B finishes; C depends only on A (already done) — C must not be dispatched again."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS)
-    spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])
+    spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA])
     finished_a = _make_finished_task(spec_a)
     started_b = _make_started_task(spec_b)
-    # C is already PENDING — a concurrent worker scheduled it under the lock
-    already_scheduled_c = make_scheduled_task(spec_c)
-    job = _make_job_with_tasks([finished_a, started_b, already_scheduled_c])
+    scheduled_c = make_scheduled_task(spec_c)
+    job = _make_job_with_tasks([finished_a, started_b, scheduled_c])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
@@ -330,18 +329,18 @@ def test_successor_already_scheduled_is_not_rescheduled(jobs_repo, broker):
         user=USER,
     )
 
-    assert successors == []
+    assert successors == [], "C depends only on A; B completion must not re-dispatch C"
     svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
     mock_dispatcher.dispatch.assert_not_called()
 
 
 def test_root_task_not_dispatched_as_successor(jobs_repo, broker):
-    """A root task (depends_on=[]) still in NEW state must not be dispatched when an unrelated task completes."""
+    """A root task (depends_on=[]) must not be dispatched again when an unrelated task completes."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
-    spec_root = make_spec(T.RELOAD_SOMATIC_MUTATIONS)  # no depends_on — root task, never explicitly scheduled
+    spec_root = make_spec(T.RELOAD_SOMATIC_MUTATIONS)  # no depends_on — root task, dispatched by initial frontier
     started_a = _make_started_task(spec_a)
-    new_root = make_new_task(spec_root)
-    job = _make_job_with_tasks([started_a, new_root])
+    scheduled_root = make_scheduled_task(spec_root)
+    job = _make_job_with_tasks([started_a, scheduled_root])
     jobs_repo.find_by_scope_id_for_update.return_value = job
 
     mock_dispatcher = MagicMock()
