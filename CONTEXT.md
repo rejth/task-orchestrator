@@ -59,6 +59,10 @@ Failing a Task fails its downstream Tasks, so nothing derived from a failed Task
 > **Dev:** "And if one predecessor failed?"
 > **Domain expert:** "Then the dependent Task never becomes Ready; failure cascades down so stale or partial work never ships."
 
+## Reconciliation sweep
+
+A Celery-beat periodic task (`reconciliation_sweep`, interval controlled by `RECONCILIATION_SWEEP_INTERVAL_SECONDS`, default 60 s) that heals Jobs stalled by a crash between commit and enqueue. It calls `ScopedJob.dispatchable_tasks()` across all Jobs and re-enqueues any `ScheduledScopedTask` whose predecessors are all Success or Skipped. Idempotency relies on reusing the Launch id as the Celery `task_id`; the domain's `start_task` guard rejects a duplicate start. Failed and aborted Tasks are never re-enqueued, so a stopped or cascade-failed Job is never resurrected. All new staleness-detection logic must route through `dispatchable_tasks()`.
+
 ## Flagged ambiguities
 
 - "schedule" was used to mean both "re-run this and all downstream" and "retry just this one". Resolved: **Schedule** = re-run downstream; a future **Retry** covers the single-Task case.
