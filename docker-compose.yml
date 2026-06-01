@@ -35,6 +35,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       ENVIRONMENT: development
       API_KEY: ${API_KEY}
+      EVENT_DRIVEN_DISPATCH: ${EVENT_DRIVEN_DISPATCH:-false}
     ports:
       - "8000:8000"
     depends_on:
