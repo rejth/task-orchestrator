@@ -79,7 +79,7 @@ Behavior matrix to encode:
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] verify all acceptance criteria from Overview/Technical Details are implemented
-- [ ] verify tests assert observable behavior via the public method only, with no internal-structure assertions
-- [ ] run full project test suite
-- [ ] run project linter - all issues must be fixed
+- [x] verify all acceptance criteria from Overview/Technical Details are implemented
+- [x] verify tests assert observable behavior via the public method only, with no internal-structure assertions
+- [x] run full project test suite
+- [x] run project linter - all issues must be fixed
