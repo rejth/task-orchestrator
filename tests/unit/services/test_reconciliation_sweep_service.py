@@ -41,8 +41,12 @@ def _make_repo(jobs: list) -> MagicMock:
     return repo
 
 
-def _make_service(jobs: list) -> ReconciliationSweepService:
-    return ReconciliationSweepService(jobs_repo=_make_repo(jobs))
+def _make_service(jobs: list, dispatcher=None) -> ReconciliationSweepService:
+    return ReconciliationSweepService(
+        jobs_repo=_make_repo(jobs),
+        dispatcher=dispatcher or MagicMock(),
+        system_user="system@sweep",
+    )
 
 
 def _make_job(scope_id: str, tasks: list) -> ScopedJob:
@@ -228,3 +232,68 @@ def test_multiple_jobs_each_contribute_stalled_tasks():
 def test_empty_repo_returns_empty_result():
     result = _make_service([]).find_stalled_tasks()
     assert result == []
+
+
+# ── sweep / re-enqueue tests ──────────────────────────────────────────────────
+
+def test_sweep_dispatches_stalled_task():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    task = _scheduled_task(spec)
+    job = _make_job("scope-1", [task])
+    dispatcher = MagicMock()
+
+    _make_service([job], dispatcher=dispatcher).sweep()
+
+    dispatcher.dispatch.assert_called_once_with([task], scope_id="scope-1", user="system@sweep")
+
+
+def test_sweep_dispatches_each_job_group_separately():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    t1 = _scheduled_task(spec)
+    t2 = _scheduled_task(spec)
+    j1 = _make_job("scope-1", [t1])
+    j2 = _make_job("scope-2", [t2])
+    dispatcher = MagicMock()
+
+    _make_service([j1, j2], dispatcher=dispatcher).sweep()
+
+    assert dispatcher.dispatch.call_count == 2
+    scope_ids = {call.kwargs["scope_id"] for call in dispatcher.dispatch.call_args_list}
+    assert scope_ids == {"scope-1", "scope-2"}
+
+
+def test_sweep_with_no_stalled_tasks_dispatches_nothing():
+    dispatcher = MagicMock()
+
+    _make_service([], dispatcher=dispatcher).sweep()
+
+    dispatcher.dispatch.assert_not_called()
+
+
+def test_sweep_is_idempotent_same_launch_id_used_on_repeat():
+    """Calling sweep twice for the same stalled task dispatches the same launch_id both times."""
+    from unittest.mock import patch
+    from uuid import uuid4
+
+    launch_id = uuid4()
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    task = _scheduled_task(spec, launch_id=launch_id)
+    job = _make_job("scope-1", [task])
+
+    captured_task_ids: list[str] = []
+
+    broker = MagicMock()
+    from src.services.task_dispatcher import TaskDispatcher
+    real_dispatcher = TaskDispatcher(broker=broker, expiry_seconds=3600)
+    service = _make_service([job], dispatcher=real_dispatcher)
+
+    with patch("src.services.task_dispatcher.Signature") as MockSig:
+        MockSig.side_effect = lambda *a, **kw: (
+            captured_task_ids.append(kw["options"]["task_id"]),
+            MagicMock(),
+        )[1]
+        service.sweep()
+        service.sweep()
+
+    assert len(captured_task_ids) == 2
+    assert captured_task_ids[0] == captured_task_ids[1] == str(launch_id)

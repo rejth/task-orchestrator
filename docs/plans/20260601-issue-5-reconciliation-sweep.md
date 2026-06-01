@@ -48,10 +48,10 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 2: Re-enqueue selected Tasks idempotently
 
-- [ ] Re-enqueue each selected Task reusing its Launch id as the Celery task id
-- [ ] Ensure a duplicate re-enqueue is a safe no-op via the existing Launch-id guard
-- [ ] write tests covering re-enqueue and idempotency
-- [ ] run project tests - must pass before next task
+- [x] Re-enqueue each selected Task reusing its Launch id as the Celery task id
+- [x] Ensure a duplicate re-enqueue is a safe no-op via the existing Launch-id guard
+- [x] write tests covering re-enqueue and idempotency
+- [x] run project tests - must pass before next task
 
 ### Task 3: Schedule the periodic sweep
 
