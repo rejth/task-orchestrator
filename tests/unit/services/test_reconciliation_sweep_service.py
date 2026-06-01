@@ -1,0 +1,230 @@
+"""Unit tests for ReconciliationSweepService stalled-task selection query."""
+from dataclasses import dataclass
+from unittest.mock import MagicMock
+from uuid import uuid4
+
+import pytest
+
+from src.domain.job import ScopedJob
+from src.domain.launch import (
+    FailMetadata,
+    FailedLaunch,
+    ProgressMetadata,
+    ScheduleMetadata,
+    ScheduledLaunch,
+    StartedLaunch,
+    SuccessMetadata,
+    SuccessfullyFinishedLaunch,
+)
+from src.domain.scoped_task import (
+    FailedScopedTask,
+    ScheduledScopedTask,
+    StartedScopedTask,
+    SuccessfullyFinishedScopedTask,
+)
+from src.domain.task import TaskSpecificationId as T
+from src.services.reconciliation_sweep_service import ReconciliationSweepService
+from tests.unit.domain.conftest import AT, BY, JOB_ID, make_spec
+
+
+@dataclass(frozen=True)
+class FakeScope:
+    _id: str
+
+    def get_id(self) -> str:
+        return self._id
+
+
+def _make_repo(jobs: list) -> MagicMock:
+    repo = MagicMock()
+    repo.list_all.return_value = jobs
+    return repo
+
+
+def _make_service(jobs: list) -> ReconciliationSweepService:
+    return ReconciliationSweepService(jobs_repo=_make_repo(jobs))
+
+
+def _make_job(scope_id: str, tasks: list) -> ScopedJob:
+    return ScopedJob(id=uuid4(), scope=FakeScope(scope_id), tasks=tasks)
+
+
+def _scheduled_task(spec, launch_id=None):
+    task_id = uuid4()
+    lid = launch_id or uuid4()
+    return ScheduledScopedTask(
+        id=task_id,
+        job_id=JOB_ID,
+        specification=spec,
+        launch_history=[],
+        current_launch=ScheduledLaunch(
+            id=lid,
+            task_id=task_id,
+            message="scheduled",
+            journal=[],
+            metadata=ScheduleMetadata(scheduled_at=AT, scheduled_by=BY),
+        ),
+    )
+
+
+def _success_task(spec):
+    task_id = uuid4()
+    lid = uuid4()
+    return SuccessfullyFinishedScopedTask(
+        id=task_id,
+        job_id=JOB_ID,
+        specification=spec,
+        launch_history=[],
+        latest_launch=SuccessfullyFinishedLaunch(
+            id=lid,
+            task_id=task_id,
+            message="done",
+            journal=[],
+            metadata=SuccessMetadata(
+                scheduled_at=AT, scheduled_by=BY, started_at=AT, finished_at=AT
+            ),
+        ),
+    )
+
+
+def _failed_task(spec, is_aborted: bool = False):
+    task_id = uuid4()
+    lid = uuid4()
+    return FailedScopedTask(
+        id=task_id,
+        job_id=JOB_ID,
+        specification=spec,
+        launch_history=[],
+        latest_launch=FailedLaunch(
+            id=lid,
+            task_id=task_id,
+            message="failed",
+            journal=[],
+            metadata=FailMetadata(
+                scheduled_at=AT,
+                scheduled_by=BY,
+                started_at=AT,
+                failed_at=AT,
+                is_aborted=is_aborted,
+            ),
+        ),
+    )
+
+
+def _started_task(spec):
+    task_id = uuid4()
+    lid = uuid4()
+    return StartedScopedTask(
+        id=task_id,
+        job_id=JOB_ID,
+        specification=spec,
+        launch_history=[],
+        current_launch=StartedLaunch(
+            id=lid,
+            task_id=task_id,
+            message="running",
+            journal=[],
+            metadata=ProgressMetadata(scheduled_at=AT, scheduled_by=BY, started_at=AT),
+        ),
+    )
+
+
+# ── selection tests ───────────────────────────────────────────────────────────
+
+def test_pending_task_with_no_deps_is_selected():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    task = _scheduled_task(spec)
+    job = _make_job("scope-1", [task])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert len(result) == 1
+    scope_id, tasks = result[0]
+    assert scope_id == "scope-1"
+    assert task in tasks
+
+
+def test_pending_task_with_all_predecessors_satisfied_is_selected():
+    pred_spec = make_spec(T.RELOAD_PATIENT_DATA)
+    dep_spec = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    predecessor = _success_task(pred_spec)
+    stalled = _scheduled_task(dep_spec)
+    job = _make_job("scope-1", [predecessor, stalled])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert len(result) == 1
+    _, tasks = result[0]
+    assert stalled in tasks
+
+
+def test_failed_task_not_selected():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    failed = _failed_task(spec)
+    job = _make_job("scope-1", [failed])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert result == []
+
+
+def test_aborted_task_not_selected():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    aborted = _failed_task(spec, is_aborted=True)
+    job = _make_job("scope-1", [aborted])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert result == []
+
+
+def test_in_progress_task_not_selected():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    running = _started_task(spec)
+    job = _make_job("scope-1", [running])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert result == []
+
+
+def test_pending_task_with_unsatisfied_predecessor_not_selected():
+    pred_spec = make_spec(T.RELOAD_PATIENT_DATA)
+    dep_spec = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    # predecessor is still running, not finished
+    predecessor = _started_task(pred_spec)
+    blocked = _scheduled_task(dep_spec)
+    job = _make_job("scope-1", [predecessor, blocked])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert result == []
+
+
+def test_job_with_no_stalled_tasks_excluded_from_results():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    running = _started_task(spec)
+    job = _make_job("scope-1", [running])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert result == []
+
+
+def test_multiple_jobs_each_contribute_stalled_tasks():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    t1 = _scheduled_task(spec)
+    t2 = _scheduled_task(spec)
+    j1 = _make_job("scope-1", [t1])
+    j2 = _make_job("scope-2", [t2])
+
+    result = _make_service([j1, j2]).find_stalled_tasks()
+
+    assert len(result) == 2
+    scope_ids = {s for s, _ in result}
+    assert scope_ids == {"scope-1", "scope-2"}
+
+
+def test_empty_repo_returns_empty_result():
+    result = _make_service([]).find_stalled_tasks()
+    assert result == []
