@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     CELERY_TASK_CHAIN_EXPIRES: int = 3600
     API_KEY: str = ""
     EVENT_DRIVEN_DISPATCH: bool = False
+    RECONCILIATION_SWEEP_INTERVAL_SECONDS: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

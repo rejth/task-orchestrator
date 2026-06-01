@@ -17,5 +17,11 @@ def get_celery_app(broker_url: str | None = None) -> Celery:
             timezone="UTC",
             enable_utc=True,
             task_track_started=True,
+            beat_schedule={
+                "reconciliation-sweep": {
+                    "task": "reconciliation_sweep",
+                    "schedule": settings.RECONCILIATION_SWEEP_INTERVAL_SECONDS,
+                },
+            },
         )
     return _app
