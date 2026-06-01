@@ -72,10 +72,10 @@ Behavior matrix to encode:
 
 ### Task 3: Scheduling gate and parallelism
 
-- [ ] Red/green: a New (un-scheduled) Task is never dispatchable even with all predecessors satisfied
-- [ ] Red/green: multiple independent ready children are all returned (parallelism preserved)
-- [ ] write tests for new/changed functionality
-- [ ] run project tests - must pass before next task
+- [x] Red/green: a New (un-scheduled) Task is never dispatchable even with all predecessors satisfied
+- [x] Red/green: multiple independent ready children are all returned (parallelism preserved)
+- [x] write tests for new/changed functionality
+- [x] run project tests - must pass before next task
 
 ### Task 4: Verify acceptance criteria
 
