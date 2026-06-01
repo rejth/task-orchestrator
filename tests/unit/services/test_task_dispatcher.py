@@ -136,3 +136,26 @@ def test_enqueued_set_matches_dispatched_tasks(dispatcher):
         dispatcher.dispatch([task_a, task_b], scope_id=SCOPE_ID, user=USER)
 
     assert enqueued_task_ids == {str(launch_id_a), str(launch_id_b)}
+
+
+@pytest.mark.parametrize("bad_expiry", [0, -1, -100])
+def test_zero_or_negative_expiry_raises(bad_expiry):
+    with pytest.raises(ValueError, match="expiry_seconds must be positive"):
+        TaskDispatcher(broker=MagicMock(), expiry_seconds=bad_expiry)
+
+
+def test_all_tasks_in_batch_share_same_expiry_reference(dispatcher):
+    """All tasks in one dispatch call use the same now reference — no per-task drift."""
+    spec_a = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(TaskSpecificationId.RELOAD_PATIENT_PARAMETERS)
+    tasks = [make_scheduled_task(spec_a), make_scheduled_task(spec_b)]
+
+    captured_expiries: list[datetime.datetime] = []
+
+    with patch("src.services.task_dispatcher.Signature") as MockSig:
+        MockSig.side_effect = lambda *a, **kw: (captured_expiries.append(kw["expires"]), MagicMock())[1]
+
+        dispatcher.dispatch(tasks, scope_id=SCOPE_ID, user=USER)
+
+    assert len(captured_expiries) == 2
+    assert captured_expiries[0] == captured_expiries[1]
