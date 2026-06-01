@@ -201,3 +201,33 @@ def test_dispatchable_tasks_failed_predecessor_blocks():
     job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[failed_root, pending_child])
 
     assert job.dispatchable_tasks() == []
+
+
+def test_dispatchable_tasks_new_task_never_dispatchable():
+    # RELOAD_PATIENT_DATA=SUCCESS (satisfied), RELOAD_SOMATIC_MUTATIONS=NEW (never scheduled)
+    spec_root = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_child = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+
+    success_root = make_new_task(spec_root).schedule(uuid4(), "s", AT, BY).start("s", AT).finish("d", AT)
+    new_child = make_new_task(spec_child)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[success_root, new_child])
+
+    assert job.dispatchable_tasks() == []
+
+
+def test_dispatchable_tasks_parallel_independent_children_all_returned():
+    # Diamond: root → [child_a, child_b] → sink
+    # After root succeeds, both children have satisfied preds → both dispatchable
+    spec_root = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_a = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    spec_b = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA])
+
+    success_root = make_new_task(spec_root).schedule(uuid4(), "s", AT, BY).start("s", AT).finish("d", AT)
+    pending_a = make_new_task(spec_a).schedule(uuid4(), "s", AT, BY)
+    pending_b = make_new_task(spec_b).schedule(uuid4(), "s", AT, BY)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[success_root, pending_a, pending_b])
+
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert ids == {T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_MATCHED_TREATMENTS}
