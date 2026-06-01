@@ -41,10 +41,10 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 1: Build the stalled-Task selection query
 
-- [ ] Add a query that selects PENDING Tasks whose predecessors are all satisfied and which are not currently running
-- [ ] Exclude Failed and aborted Tasks from the selection
-- [ ] write unit tests for the selection query
-- [ ] run project tests - must pass before next task
+- [x] Add a query that selects PENDING Tasks whose predecessors are all satisfied and which are not currently running
+- [x] Exclude Failed and aborted Tasks from the selection
+- [x] write unit tests for the selection query
+- [x] run project tests - must pass before next task
 
 ### Task 2: Re-enqueue selected Tasks idempotently
 

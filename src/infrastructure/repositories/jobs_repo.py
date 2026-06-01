@@ -300,6 +300,13 @@ class SQLJobsRepository:
             self._session.delete(model)
             self._session.flush()
 
+    def list_all(self) -> list[ScopedJobInterface]:
+        models = self._session.query(JobModel).all()
+        return [
+            ScopedJob(id=m.id, scope=Scope(scope_id=m.scope_id), tasks=[_task_to_domain(t) for t in m.tasks])
+            for m in models
+        ]
+
     # ── internal ──────────────────────────────────────────────────────────────
 
     def _load(self, scope_id: str, for_update: bool) -> Optional[ScopedJobInterface]:
