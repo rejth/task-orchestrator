@@ -58,9 +58,9 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 3: Verify acceptance criteria
 
-- [ ] verify each runnable Task is enqueued as its own Celery signature
-- [ ] verify each signature uses the Task's Launch id as the Celery task id
-- [ ] verify each signature carries a per-Task expiry
-- [ ] verify signatures are immutable and no chain/group canvas is constructed
-- [ ] run full project test suite
-- [ ] run project linter - all issues must be fixed
+- [x] verify each runnable Task is enqueued as its own Celery signature
+- [x] verify each signature uses the Task's Launch id as the Celery task id
+- [x] verify each signature carries a per-Task expiry
+- [x] verify signatures are immutable and no chain/group canvas is constructed
+- [x] run full project test suite
+- [x] run project linter - all issues must be fixed
