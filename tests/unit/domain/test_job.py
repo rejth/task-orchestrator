@@ -16,7 +16,7 @@ from src.domain.scoped_task import (
     ScopedTaskStatus,
 )
 from src.domain.task import TaskSpecification, TaskSpecificationId
-from tests.unit.domain.conftest import AT, BY, JOB_ID
+from tests.unit.domain.conftest import AT, BY, JOB_ID, make_new_task, make_spec
 
 LAUNCH_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 T = TaskSpecificationId
@@ -136,6 +136,22 @@ def test_fail_with_wrong_launch_id_raises():
 
 # ── dispatchable_tasks ────────────────────────────────────────────────────────
 
+def _succeed(job: ScopedJob, spec_id: TaskSpecificationId) -> ScopedJob:
+    task = next(t for t in job.dispatchable_tasks() if t.spec_id == spec_id)
+    job, started = job.start(spec_id, task.current_launch.id, "s", AT)
+    job, _ = job.success(spec_id, started.current_launch.id, "d", AT)
+    return job
+
+
+def _skip(job: ScopedJob, spec_id: TaskSpecificationId) -> ScopedJob:
+    task = next(t for t in job.get_tasks() if t.spec_id == spec_id)
+    from src.domain.scoped_task import ScheduledScopedTask as _Sched
+    assert isinstance(task, _Sched)
+    job, started = job.start(spec_id, task.current_launch.id, "s", AT)
+    job, _ = job.skip(spec_id, started.current_launch.id, "s", AT)
+    return job
+
+
 def test_dispatchable_tasks_linear_job_returns_only_root():
     job = make_fresh_job()
     scheduled = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY)
@@ -145,3 +161,43 @@ def test_dispatchable_tasks_linear_job_returns_only_root():
 
     assert len(dispatchable) == 1
     assert dispatchable[0].spec_id == T.RELOAD_PATIENT_DATA
+
+
+def test_dispatchable_tasks_fan_in_requires_all_predecessors():
+    job = make_fresh_job()
+    job = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY).updated_job
+
+    # succeed root — only RELOAD_SOMATIC_MUTATIONS should be dispatchable, not fan-in yet
+    job = _succeed(job, T.RELOAD_PATIENT_DATA)
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert T.RELOAD_SOMATIC_MUTATIONS in ids
+    assert T.RELOAD_MATCHED_TREATMENTS not in ids
+
+    # succeed second predecessor — now fan-in becomes dispatchable
+    job = _succeed(job, T.RELOAD_SOMATIC_MUTATIONS)
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert T.RELOAD_MATCHED_TREATMENTS in ids
+
+
+def test_dispatchable_tasks_skipped_predecessor_unblocks():
+    job = make_fresh_job()
+    job = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY).updated_job
+
+    job = _succeed(job, T.RELOAD_PATIENT_DATA)
+    job = _skip(job, T.RELOAD_SOMATIC_MUTATIONS)
+
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert T.RELOAD_MATCHED_TREATMENTS in ids
+
+
+def test_dispatchable_tasks_failed_predecessor_blocks():
+    # Build job directly: RELOAD_PATIENT_DATA=FAILED, RELOAD_SOMATIC_MUTATIONS=PENDING
+    spec_root = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_child = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+
+    failed_root = make_new_task(spec_root).schedule(uuid4(), "s", AT, BY).start("s", AT).fail("err", AT, False)
+    pending_child = make_new_task(spec_child).schedule(uuid4(), "s", AT, BY)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[failed_root, pending_child])
+
+    assert job.dispatchable_tasks() == []
