@@ -43,12 +43,12 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 1: Build the dispatcher that enqueues runnable Tasks
 
-- [ ] Add a dispatcher component that accepts a list of runnable Tasks
-- [ ] Enqueue each Task as its own immutable Celery signature (no chain/group)
-- [ ] Set the Celery task id to the Task's Launch id as the idempotency key
-- [ ] Attach a per-Task expiry to each signature
-- [ ] write tests for new functionality
-- [ ] run project tests - must pass before next task
+- [x] Add a dispatcher component that accepts a list of runnable Tasks
+- [x] Enqueue each Task as its own immutable Celery signature (no chain/group)
+- [x] Set the Celery task id to the Task's Launch id as the idempotency key
+- [x] Attach a per-Task expiry to each signature
+- [x] write tests for new functionality
+- [x] run project tests - must pass before next task
 
 ### Task 2: Confirm idempotent duplicate enqueue
 
