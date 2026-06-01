@@ -4,8 +4,7 @@ from celery import Celery
 from celery.canvas import Signature
 
 from src.domain.scoped_task import ScheduledScopedTask
-
-TASK_NAME = "task_runner"
+from src.services.make_celery_chain import TASK_NAME
 
 
 class TaskDispatcher:
