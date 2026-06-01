@@ -64,11 +64,11 @@ Behavior matrix to encode:
 
 ### Task 2: Predecessor satisfaction rules
 
-- [ ] Red/green: a fan-in successor is not dispatchable until the last predecessor is satisfied
-- [ ] Red/green: a SKIPPED predecessor unblocks a successor exactly like SUCCESS
-- [ ] Red/green: a FAILED predecessor keeps the dependent permanently non-dispatchable
-- [ ] write tests for new/changed functionality
-- [ ] run project tests - must pass before next task
+- [x] Red/green: a fan-in successor is not dispatchable until the last predecessor is satisfied
+- [x] Red/green: a SKIPPED predecessor unblocks a successor exactly like SUCCESS
+- [x] Red/green: a FAILED predecessor keeps the dependent permanently non-dispatchable
+- [x] write tests for new/changed functionality
+- [x] run project tests - must pass before next task
 
 ### Task 3: Scheduling gate and parallelism
 
