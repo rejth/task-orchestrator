@@ -7,6 +7,7 @@ from uuid import UUID
 from celery import Task as CeleryTask
 from celery.exceptions import TaskError
 
+from src.domain.job import InvalidChangeTaskStatusOperation
 from src.domain.journal import Log, LogLevel, UnclassifiedLogRecord
 from src.domain.task import TaskSpecificationId
 from src.handlers.demo import DemoHandler
@@ -48,7 +49,11 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
             jobs_repo = SQLJobsRepository(session=session)
             service = TasksManagementService(jobs_repo=jobs_repo, broker=celery_app)
 
-            service.start_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
+            try:
+                service.start_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
+            except InvalidChangeTaskStatusOperation:
+                logger.warning("Duplicate or stale message for launch %s — discarding", launch_id)
+                return
             status, logs = _run_handler(task_spec_id=task_spec_id, scope_id=scope_id, launch_id=launch_uuid)
 
             if logs:
