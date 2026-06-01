@@ -319,7 +319,7 @@ class SQLJobsRepository:
                 tasks = [_task_to_domain(t) for t in m.tasks]
                 jobs.append(ScopedJob(id=m.id, scope=Scope(scope_id=m.scope_id), tasks=tasks))
             except Exception:
-                logger.warning("Failed to hydrate job %s, skipping", m.id)
+                logger.warning("Failed to hydrate job %s, skipping", m.id, exc_info=True)
         return jobs
 
     # ── internal ──────────────────────────────────────────────────────────────
