@@ -62,9 +62,9 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] verify a scheduled periodic task runs the sweep on an interval
-- [ ] verify a Task left runnable-but-not-running is re-enqueued
-- [ ] verify re-enqueue is idempotent (Launch id as task id; no duplicate execution)
-- [ ] verify Failed/aborted Tasks are never re-enqueued
-- [ ] run full project test suite
-- [ ] run project linter - all issues must be fixed
+- [x] verify a scheduled periodic task runs the sweep on an interval
+- [x] verify a Task left runnable-but-not-running is re-enqueued
+- [x] verify re-enqueue is idempotent (Launch id as task id; no duplicate execution)
+- [x] verify Failed/aborted Tasks are never re-enqueued
+- [x] run full project test suite
+- [x] run project linter - all issues must be fixed
