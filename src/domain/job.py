@@ -403,12 +403,13 @@ class ScopedJob(Generic[S]):
 
     def dispatchable_tasks(self) -> list[ScheduledScopedTask]:
         """PENDING tasks whose every predecessor is SUCCESS or SKIPPED — runnable now."""
+        task_by_id = {t.spec_id: t for t in self.tasks}
         result = []
-        for task in self.tasks:
+        for task in self.get_tasks():
             if not isinstance(task, ScheduledScopedTask):
                 continue
             if all(
-                isinstance(self._get_task_by_id(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
+                isinstance(task_by_id.get(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
                 for pred_id in task.specification.depends_on
             ):
                 result.append(task)

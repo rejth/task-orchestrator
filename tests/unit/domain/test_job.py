@@ -245,3 +245,13 @@ def test_dispatchable_tasks_empty_job_returns_empty():
     job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[])
 
     assert job.dispatchable_tasks() == []
+
+
+def test_dispatchable_tasks_missing_predecessor_treated_as_unsatisfied():
+    # Child references a predecessor ID not present in self.tasks — must not raise, must block.
+    spec_child = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    pending_child = make_new_task(spec_child).schedule(uuid4(), "s", AT, BY)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[pending_child])
+
+    assert job.dispatchable_tasks() == []
