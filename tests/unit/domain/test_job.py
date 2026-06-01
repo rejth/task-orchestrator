@@ -8,15 +8,17 @@ from src.domain.job import (
     InvalidChangeTaskStatusOperation,
     RequiredTaskNotFinished,
     ScopedJob,
+    ScopedJobInterface,
     TaskNotFound,
 )
 from src.domain.scoped_task import (
     LaunchNotFound,
     NewScopedTask,
+    ScheduledScopedTask,
     ScopedTaskStatus,
 )
-from src.domain.task import TaskSpecification, TaskSpecificationId
-from tests.unit.domain.conftest import AT, BY, JOB_ID
+from src.domain.task import TaskSpecificationId
+from tests.unit.domain.conftest import AT, BY, JOB_ID, make_new_task, make_spec
 
 LAUNCH_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 T = TaskSpecificationId
@@ -35,20 +37,16 @@ class MockScope:
 # Plus a parallel branch off RELOAD_PATIENT_DATA:
 # RELOAD_PATIENT_DATA → RELOAD_SOMATIC_MUTATIONS (independent of treatment chain)
 
-def _spec(id: TaskSpecificationId, depends_on: list[TaskSpecificationId] | None = None) -> TaskSpecification:
-    return TaskSpecification(id=id, label=id.value, description="", depends_on=depends_on or [])
-
-
 def make_fresh_job() -> ScopedJob[MockScope]:
     return ScopedJob[MockScope](
         id=JOB_ID,
         scope=MockScope(),
         tasks=[
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=_spec(T.RELOAD_PATIENT_DATA)),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=_spec(T.RELOAD_SOMATIC_MUTATIONS, [T.RELOAD_PATIENT_DATA])),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=_spec(T.RELOAD_MATCHED_TREATMENTS, [T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=_spec(T.EXPORT_TREATMENTS, [T.RELOAD_MATCHED_TREATMENTS])),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=_spec(T.PUSH_MATCHED_TREATMENTS, [T.EXPORT_TREATMENTS])),
+            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_PATIENT_DATA)),
+            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])),
+            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])),
+            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.EXPORT_TREATMENTS, depends_on=[T.RELOAD_MATCHED_TREATMENTS])),
+            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.PUSH_MATCHED_TREATMENTS, depends_on=[T.EXPORT_TREATMENTS])),
         ],
     )
 
@@ -111,7 +109,7 @@ def test_fail_new_task_raises():
 def test_task_not_found_raises():
     single: ScopedJob[MockScope] = ScopedJob(
         id=JOB_ID, scope=MockScope(),
-        tasks=[NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=_spec(T.RELOAD_PATIENT_DATA))],
+        tasks=[NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_PATIENT_DATA))],
     )
     with pytest.raises(TaskNotFound):
         single.schedule(task_id=T.RELOAD_SOMATIC_MUTATIONS, launch_id_generator=uuid4, message="x", at=AT, by=BY)
@@ -132,3 +130,129 @@ def test_fail_with_wrong_launch_id_raises():
     updated_job, started = updated_job.start(root.spec_id, root.current_launch.id, "s", AT)
     with pytest.raises(LaunchNotFound):
         updated_job.fail(task_id=root.spec_id, launch_id=uuid4(), message="err", at=AT, is_aborted=False)
+
+
+# ── dispatchable_tasks ────────────────────────────────────────────────────────
+
+def _succeed(job: ScopedJobInterface[MockScope], spec_id: TaskSpecificationId) -> ScopedJobInterface[MockScope]:
+    task = next((t for t in job.get_tasks() if t.spec_id == spec_id), None)
+    assert task is not None and isinstance(task, ScheduledScopedTask), f"{spec_id} not scheduled"
+    job, started = job.start(spec_id, task.current_launch.id, "s", AT)
+    job, _ = job.success(spec_id, started.current_launch.id, "d", AT)
+    return job
+
+
+def _skip(job: ScopedJobInterface[MockScope], spec_id: TaskSpecificationId) -> ScopedJobInterface[MockScope]:
+    task = next((t for t in job.get_tasks() if t.spec_id == spec_id), None)
+    assert task is not None and isinstance(task, ScheduledScopedTask), f"{spec_id} not scheduled"
+    job, started = job.start(spec_id, task.current_launch.id, "s", AT)
+    job, _ = job.skip(spec_id, started.current_launch.id, "s", AT)
+    return job
+
+
+def test_dispatchable_tasks_linear_job_returns_only_root():
+    job = make_fresh_job()
+    scheduled = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY)
+    updated_job = scheduled.updated_job
+
+    dispatchable = updated_job.dispatchable_tasks()
+
+    assert len(dispatchable) == 1
+    assert dispatchable[0].spec_id == T.RELOAD_PATIENT_DATA
+
+
+def test_dispatchable_tasks_fan_in_requires_all_predecessors():
+    job = make_fresh_job()
+    job = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY).updated_job
+
+    # succeed root — only RELOAD_SOMATIC_MUTATIONS should be dispatchable, not fan-in yet
+    job = _succeed(job, T.RELOAD_PATIENT_DATA)
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert ids == {T.RELOAD_SOMATIC_MUTATIONS}
+
+    # succeed second predecessor — now fan-in becomes dispatchable
+    job = _succeed(job, T.RELOAD_SOMATIC_MUTATIONS)
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert ids == {T.RELOAD_MATCHED_TREATMENTS}
+
+
+def test_dispatchable_tasks_skipped_predecessor_unblocks():
+    job = make_fresh_job()
+    job = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY).updated_job
+
+    job = _succeed(job, T.RELOAD_PATIENT_DATA)
+    job = _skip(job, T.RELOAD_SOMATIC_MUTATIONS)
+
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert T.RELOAD_MATCHED_TREATMENTS in ids
+
+
+def test_dispatchable_tasks_failed_predecessor_blocks():
+    # Build job directly: RELOAD_PATIENT_DATA=FAILED, RELOAD_SOMATIC_MUTATIONS=PENDING
+    spec_root = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_child = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+
+    failed_root = make_new_task(spec_root).schedule(uuid4(), "s", AT, BY).start("s", AT).fail("err", AT, False)
+    pending_child = make_new_task(spec_child).schedule(uuid4(), "s", AT, BY)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[failed_root, pending_child])
+
+    assert job.dispatchable_tasks() == []
+
+
+def test_dispatchable_tasks_new_task_never_dispatchable():
+    # RELOAD_PATIENT_DATA=SUCCESS (satisfied), RELOAD_SOMATIC_MUTATIONS=NEW (never scheduled)
+    spec_root = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_child = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+
+    success_root = make_new_task(spec_root).schedule(uuid4(), "s", AT, BY).start("s", AT).finish("d", AT)
+    new_child = make_new_task(spec_child)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[success_root, new_child])
+
+    assert job.dispatchable_tasks() == []
+
+
+def test_dispatchable_tasks_parallel_independent_children_all_returned():
+    # Diamond: root → [child_a, child_b] → sink
+    # After root succeeds, both children have satisfied preds → both dispatchable
+    spec_root = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_a = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    spec_b = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA])
+
+    success_root = make_new_task(spec_root).schedule(uuid4(), "s", AT, BY).start("s", AT).finish("d", AT)
+    pending_a = make_new_task(spec_a).schedule(uuid4(), "s", AT, BY)
+    pending_b = make_new_task(spec_b).schedule(uuid4(), "s", AT, BY)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[success_root, pending_a, pending_b])
+
+    ids = {t.spec_id for t in job.dispatchable_tasks()}
+    assert ids == {T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_MATCHED_TREATMENTS}
+
+
+def test_dispatchable_tasks_started_predecessor_blocks():
+    spec_root = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_child = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+
+    started_root = make_new_task(spec_root).schedule(uuid4(), "s", AT, BY).start("s", AT)
+    pending_child = make_new_task(spec_child).schedule(uuid4(), "s", AT, BY)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[started_root, pending_child])
+
+    assert job.dispatchable_tasks() == []
+
+
+def test_dispatchable_tasks_empty_job_returns_empty():
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[])
+
+    assert job.dispatchable_tasks() == []
+
+
+def test_dispatchable_tasks_missing_predecessor_treated_as_unsatisfied():
+    # Child references a predecessor ID not present in self.tasks — must not raise, must block.
+    spec_child = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    pending_child = make_new_task(spec_child).schedule(uuid4(), "s", AT, BY)
+
+    job: ScopedJob = ScopedJob(id=JOB_ID, scope=MockScope(), tasks=[pending_child])
+
+    assert job.dispatchable_tasks() == []

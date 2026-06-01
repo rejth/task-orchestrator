@@ -37,7 +37,7 @@ Re-run a single failed/missing Task without re-running already-successful downst
 Hand a ready Task to the executor (Celery) for execution. Distinct from Schedule: scheduling decides intent and state; dispatch is the act of enqueuing.
 
 **Readiness**:
-A Task is ready when all of its predecessors are Success or Skipped. A Failed predecessor blocks readiness (see Cascade fail).
+A Task is ready when all of its predecessors are Success or Skipped. A Failed predecessor blocks readiness (see Cascade fail). `ScopedJob.dispatchable_tasks()` is the canonical implementation of this rule — a pure query returning all Pending (Scheduled) Tasks that are ready now. Initial dispatch, successor dispatch, and the reconciliation sweep must all route through this method rather than re-deriving the readiness rule.
 
 **Cascade fail**:
 Failing a Task fails its downstream Tasks, so nothing derived from a failed Task runs.
