@@ -79,7 +79,7 @@ src/
 ├── handlers/       # TaskHandlerInterface + DemoHandler
 └── workers/        # Celery consumer entry point
 tests/
-├── unit/domain/    # 40 pure domain tests (no DB, no HTTP)
+├── unit/domain/    # 48 pure domain tests (no DB, no HTTP)
 └── integration/    # 9 API tests against SQLite in-memory
 alembic/versions/   # Single initial migration (5 tables)
 ```
