@@ -29,7 +29,7 @@ def sweep_mocks():
 
 
 def test_sweep_task_name():
-    assert reconciliation_sweep.name == SWEEP_TASK_NAME
+    assert reconciliation_sweep.name == SWEEP_TASK_NAME  # type: ignore[attr-defined]
 
 
 def test_beat_schedule_contains_sweep_entry():
