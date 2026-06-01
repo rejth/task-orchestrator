@@ -306,17 +306,21 @@ class SQLJobsRepository:
             .filter(JobModel.tasks.any(ScopedTaskModel.status == ScopedTaskStatus.PENDING))
             .options(
                 selectinload(JobModel.tasks).options(
-                    selectinload(ScopedTaskModel.current_launch),
-                    selectinload(ScopedTaskModel.latest_launch),
-                    selectinload(ScopedTaskModel.launch_history),
+                    selectinload(ScopedTaskModel.current_launch).selectinload(TaskLaunchModel.journal),
+                    selectinload(ScopedTaskModel.latest_launch).selectinload(TaskLaunchModel.journal),
+                    selectinload(ScopedTaskModel.launch_history).selectinload(TaskLaunchModel.journal),
                 )
             )
             .all()
         )
-        return [
-            ScopedJob(id=m.id, scope=Scope(scope_id=m.scope_id), tasks=[_task_to_domain(t) for t in m.tasks])
-            for m in models
-        ]
+        jobs: list[ScopedJobInterface] = []
+        for m in models:
+            try:
+                tasks = [_task_to_domain(t) for t in m.tasks]
+                jobs.append(ScopedJob(id=m.id, scope=Scope(scope_id=m.scope_id), tasks=tasks))
+            except Exception:
+                logger.warning("Failed to hydrate job %s, skipping", m.id)
+        return jobs
 
     # ── internal ──────────────────────────────────────────────────────────────
 
