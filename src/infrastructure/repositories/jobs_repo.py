@@ -308,6 +308,7 @@ class SQLJobsRepository:
                 selectinload(JobModel.tasks).options(
                     selectinload(ScopedTaskModel.current_launch),
                     selectinload(ScopedTaskModel.latest_launch),
+                    selectinload(ScopedTaskModel.launch_history),
                 )
             )
             .all()
