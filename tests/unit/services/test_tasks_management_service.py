@@ -189,6 +189,25 @@ def test_skip_task_event_driven_schedules_and_dispatches_successor(jobs_repo, br
     mock_dispatcher.dispatch.assert_called_once_with(tasks=successors, scope_id=SCOPE_ID, user=USER)
 
 
+def test_skip_task_canvas_no_successor_dispatch(jobs_repo, broker):
+    spec_a = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    started_a = _make_started_task(spec_a)
+    new_b = make_new_task(spec_b)
+    job = _make_job_with_tasks([started_a, new_b])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=False, task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.skip_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+
+    assert successors == []
+    assert jobs_repo.update_task.call_count == 1
+    svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
+    mock_dispatcher.dispatch.assert_not_called()
+
+
 def test_finish_task_canvas_no_successor_dispatch(jobs_repo, broker):
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
@@ -289,8 +308,8 @@ def test_fan_in_last_predecessor_completes_dispatches_successor(jobs_repo, broke
     mock_dispatcher.dispatch.assert_called_once_with(tasks=successors, scope_id=SCOPE_ID, user=USER)
 
 
-def test_fan_in_exactly_once_successor_already_pending_not_redispatched(jobs_repo, broker):
-    """Concurrent worker already scheduled the successor: lock-based exactly-once prevents double dispatch."""
+def test_successor_already_scheduled_is_not_rescheduled(jobs_repo, broker):
+    """Successor already in PENDING state is not rescheduled — the state-machine filter on NewScopedTask prevents double-dispatch."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS)
     spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])
@@ -313,4 +332,24 @@ def test_fan_in_exactly_once_successor_already_pending_not_redispatched(jobs_rep
 
     assert successors == []
     svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
+    mock_dispatcher.dispatch.assert_not_called()
+
+
+def test_root_task_not_dispatched_as_successor(jobs_repo, broker):
+    """A root task (depends_on=[]) still in NEW state must not be dispatched when an unrelated task completes."""
+    spec_a = make_spec(T.RELOAD_PATIENT_DATA)
+    spec_root = make_spec(T.RELOAD_SOMATIC_MUTATIONS)  # no depends_on — root task, never explicitly scheduled
+    started_a = _make_started_task(spec_a)
+    new_root = make_new_task(spec_root)
+    job = _make_job_with_tasks([started_a, new_root])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.finish_task(
+        scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER
+    )
+
+    assert successors == [], "Root task with no predecessors must not appear in successor list"
     mock_dispatcher.dispatch.assert_not_called()

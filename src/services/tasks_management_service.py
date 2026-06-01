@@ -157,7 +157,7 @@ class TasksManagementService:
         for task in updated_job.get_tasks():
             if not isinstance(task, NewScopedTask):
                 continue
-            if all(
+            if task.specification.depends_on and all(
                 isinstance(task_by_id.get(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
                 for pred_id in task.specification.depends_on
             ):
