@@ -4,7 +4,7 @@ import logging
 from typing import Optional, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.domain.job import ScopedJob, ScopedJobInterface
 from src.domain.journal import (
@@ -66,8 +66,8 @@ def _log_record_to_domain(model: ExecutionLogRecordModel) -> LaunchLogRecord:
     return LaunchLogRecord(id=model.id, launch_id=model.launch_id, log=log)
 
 
-def _launch_to_domain(model: TaskLaunchModel) -> TaskLaunch:
-    journal = [_log_record_to_domain(j) for j in model.journal]
+def _launch_to_domain(model: TaskLaunchModel, *, include_journal: bool = True) -> TaskLaunch:
+    journal = [_log_record_to_domain(j) for j in model.journal] if include_journal else []
     base = {"id": model.id, "task_id": model.task_id, "message": model.message, "journal": journal}
 
     match model.status:
@@ -139,9 +139,13 @@ def _task_spec_from_model(model: ScopedTaskModel) -> TaskSpecification:
     )
 
 
-def _task_to_domain(model: ScopedTaskModel) -> ScopedTask:
+def _task_to_domain(model: ScopedTaskModel, *, lightweight: bool = False) -> ScopedTask:
     spec = _task_spec_from_model(model)
-    history = cast(list[FinishedLaunch], [_launch_to_domain(launch) for launch in model.launch_history])
+    history: list[FinishedLaunch] = (
+        []
+        if lightweight
+        else cast(list[FinishedLaunch], [_launch_to_domain(launch) for launch in model.launch_history])
+    )
 
     match model.status:
         case ScopedTaskStatus.NEW:
@@ -152,7 +156,7 @@ def _task_to_domain(model: ScopedTaskModel) -> ScopedTask:
             )
         case ScopedTaskStatus.PENDING:
             assert model.current_launch is not None
-            current = _launch_to_domain(model.current_launch)
+            current = _launch_to_domain(model.current_launch, include_journal=not lightweight)
             assert isinstance(current, ScheduledLaunch)
             return ScheduledScopedTask(
                 id=model.id,
@@ -163,7 +167,7 @@ def _task_to_domain(model: ScopedTaskModel) -> ScopedTask:
             )
         case ScopedTaskStatus.IN_PROGRESS:
             assert model.current_launch is not None
-            current = _launch_to_domain(model.current_launch)
+            current = _launch_to_domain(model.current_launch, include_journal=not lightweight)
             assert isinstance(current, StartedLaunch)
             return StartedScopedTask(
                 id=model.id,
@@ -174,7 +178,7 @@ def _task_to_domain(model: ScopedTaskModel) -> ScopedTask:
             )
         case ScopedTaskStatus.SUCCESS:
             assert model.latest_launch is not None
-            latest = _launch_to_domain(model.latest_launch)
+            latest = _launch_to_domain(model.latest_launch, include_journal=not lightweight)
             assert isinstance(latest, SuccessfullyFinishedLaunch)
             return SuccessfullyFinishedScopedTask(
                 id=model.id,
@@ -185,7 +189,7 @@ def _task_to_domain(model: ScopedTaskModel) -> ScopedTask:
             )
         case ScopedTaskStatus.FAILED:
             assert model.latest_launch is not None
-            latest = _launch_to_domain(model.latest_launch)
+            latest = _launch_to_domain(model.latest_launch, include_journal=not lightweight)
             assert isinstance(latest, FailedLaunch)
             return FailedScopedTask(
                 id=model.id,
@@ -196,7 +200,7 @@ def _task_to_domain(model: ScopedTaskModel) -> ScopedTask:
             )
         case ScopedTaskStatus.SKIPPED:
             assert model.latest_launch is not None
-            latest = _launch_to_domain(model.latest_launch)
+            latest = _launch_to_domain(model.latest_launch, include_journal=not lightweight)
             assert isinstance(latest, SkippedLaunch)
             return SkippedScopedTask(
                 id=model.id,
@@ -299,6 +303,27 @@ class SQLJobsRepository:
         if model:
             self._session.delete(model)
             self._session.flush()
+
+    def list_all(self) -> list[ScopedJobInterface]:
+        models = (
+            self._session.query(JobModel)
+            .filter(JobModel.tasks.any(ScopedTaskModel.status == ScopedTaskStatus.PENDING))
+            .options(
+                selectinload(JobModel.tasks).options(
+                    selectinload(ScopedTaskModel.current_launch),
+                    selectinload(ScopedTaskModel.latest_launch),
+                )
+            )
+            .all()
+        )
+        jobs: list[ScopedJobInterface] = []
+        for m in models:
+            try:
+                tasks = [_task_to_domain(t, lightweight=True) for t in m.tasks]
+                jobs.append(ScopedJob(id=m.id, scope=Scope(scope_id=m.scope_id), tasks=tasks))
+            except Exception:
+                logger.error("Failed to hydrate job %s, skipping", m.id, exc_info=True)
+        return jobs
 
     # ── internal ──────────────────────────────────────────────────────────────
 
