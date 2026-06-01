@@ -399,6 +399,20 @@ class ScopedJob(Generic[S]):
             self, tasks=[updated_task if updated_task.match(task_id=t.spec_id) else t for t in self.tasks]
         )
 
+    def dispatchable_tasks(self) -> list[ScheduledScopedTask]:
+        """PENDING tasks whose every predecessor is SUCCESS or SKIPPED — runnable now."""
+        tasks_by_id = {t.spec_id: t for t in self.tasks}
+        result = []
+        for task in self.tasks:
+            if not isinstance(task, ScheduledScopedTask):
+                continue
+            if all(
+                isinstance(tasks_by_id[pred_id], (SuccessfullyFinishedScopedTask, SkippedScopedTask))
+                for pred_id in task.specification.depends_on
+            ):
+                result.append(task)
+        return result
+
     def _get_outstanding_tasks(self) -> list[ScopedTask]:
         return [t for t in self.get_tasks() if isinstance(t, ScheduledScopedTask | StartedScopedTask)]
 
