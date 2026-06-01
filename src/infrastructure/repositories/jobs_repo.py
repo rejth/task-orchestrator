@@ -4,7 +4,7 @@ import logging
 from typing import Optional, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.domain.job import ScopedJob, ScopedJobInterface
 from src.domain.journal import (
@@ -301,7 +301,18 @@ class SQLJobsRepository:
             self._session.flush()
 
     def list_all(self) -> list[ScopedJobInterface]:
-        models = self._session.query(JobModel).all()
+        launch_with_journal = selectinload(TaskLaunchModel.journal)
+        models = (
+            self._session.query(JobModel)
+            .options(
+                selectinload(JobModel.tasks).options(
+                    selectinload(ScopedTaskModel.current_launch).options(launch_with_journal),
+                    selectinload(ScopedTaskModel.latest_launch).options(launch_with_journal),
+                    selectinload(ScopedTaskModel.launch_history).options(launch_with_journal),
+                )
+            )
+            .all()
+        )
         return [
             ScopedJob(id=m.id, scope=Scope(scope_id=m.scope_id), tasks=[_task_to_domain(t) for t in m.tasks])
             for m in models

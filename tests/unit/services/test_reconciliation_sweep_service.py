@@ -10,13 +10,17 @@ from src.domain.launch import (
     ProgressMetadata,
     ScheduledLaunch,
     ScheduleMetadata,
+    SkipMetadata,
+    SkippedLaunch,
     StartedLaunch,
     SuccessfullyFinishedLaunch,
     SuccessMetadata,
 )
 from src.domain.scoped_task import (
     FailedScopedTask,
+    NewScopedTask,
     ScheduledScopedTask,
+    SkippedScopedTask,
     StartedScopedTask,
     SuccessfullyFinishedScopedTask,
 )
@@ -131,6 +135,28 @@ def _started_task(spec) -> StartedScopedTask:
     )
 
 
+def _skipped_task(spec) -> SkippedScopedTask:
+    task_id = uuid4()
+    lid = uuid4()
+    return SkippedScopedTask(
+        id=task_id,
+        job_id=JOB_ID,
+        specification=spec,
+        launch_history=[],
+        latest_launch=SkippedLaunch(
+            id=lid,
+            task_id=task_id,
+            message="skipped",
+            journal=[],
+            metadata=SkipMetadata(scheduled_at=AT, scheduled_by=BY, started_at=AT, skipped_at=AT),
+        ),
+    )
+
+
+def _new_task(spec) -> NewScopedTask:
+    return NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=spec)
+
+
 # ── selection tests ───────────────────────────────────────────────────────────
 
 def test_pending_task_with_no_deps_is_selected():
@@ -203,14 +229,28 @@ def test_pending_task_with_unsatisfied_predecessor_not_selected():
     assert result == []
 
 
-def test_job_with_no_stalled_tasks_excluded_from_results():
+def test_new_task_not_selected():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
-    running = _started_task(spec)
-    job = _make_job("scope-1", [running])
+    new_task = _new_task(spec)
+    job = _make_job("scope-1", [new_task])
 
     result = _make_service([job]).find_stalled_tasks()
 
     assert result == []
+
+
+def test_pending_task_with_skipped_predecessor_is_selected():
+    pred_spec = make_spec(T.RELOAD_PATIENT_DATA)
+    dep_spec = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
+    predecessor = _skipped_task(pred_spec)
+    stalled = _scheduled_task(dep_spec)
+    job = _make_job("scope-1", [predecessor, stalled])
+
+    result = _make_service([job]).find_stalled_tasks()
+
+    assert len(result) == 1
+    _, tasks = result[0]
+    assert stalled in tasks
 
 
 def test_multiple_jobs_each_contribute_stalled_tasks():
