@@ -124,6 +124,8 @@ class ScopedJobInterface(Protocol[S]):
 
     def get_log_file(self, task_id: TaskSpecificationId, launch_id: UUID, log_id: UUID) -> FileLogRecord: ...
 
+    def dispatchable_tasks(self) -> list[ScheduledScopedTask]: ...
+
 
 @dataclass
 class ScopedJob(Generic[S]):
@@ -401,13 +403,12 @@ class ScopedJob(Generic[S]):
 
     def dispatchable_tasks(self) -> list[ScheduledScopedTask]:
         """PENDING tasks whose every predecessor is SUCCESS or SKIPPED — runnable now."""
-        tasks_by_id = {t.spec_id: t for t in self.tasks}
         result = []
         for task in self.tasks:
             if not isinstance(task, ScheduledScopedTask):
                 continue
             if all(
-                isinstance(tasks_by_id[pred_id], (SuccessfullyFinishedScopedTask, SkippedScopedTask))
+                isinstance(self._get_task_by_id(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
                 for pred_id in task.specification.depends_on
             ):
                 result.append(task)
