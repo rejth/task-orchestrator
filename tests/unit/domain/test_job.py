@@ -8,6 +8,7 @@ from src.domain.job import (
     InvalidChangeTaskStatusOperation,
     RequiredTaskNotFinished,
     ScopedJob,
+    ScopedJobInterface,
     TaskNotFound,
 )
 from src.domain.scoped_task import (
@@ -133,7 +134,7 @@ def test_fail_with_wrong_launch_id_raises():
 
 # ── dispatchable_tasks ────────────────────────────────────────────────────────
 
-def _succeed(job: ScopedJob, spec_id: TaskSpecificationId) -> ScopedJob:
+def _succeed(job: ScopedJobInterface[MockScope], spec_id: TaskSpecificationId) -> ScopedJobInterface[MockScope]:
     task = next((t for t in job.get_tasks() if t.spec_id == spec_id), None)
     assert task is not None and isinstance(task, ScheduledScopedTask), f"{spec_id} not scheduled"
     job, started = job.start(spec_id, task.current_launch.id, "s", AT)
@@ -141,7 +142,7 @@ def _succeed(job: ScopedJob, spec_id: TaskSpecificationId) -> ScopedJob:
     return job
 
 
-def _skip(job: ScopedJob, spec_id: TaskSpecificationId) -> ScopedJob:
+def _skip(job: ScopedJobInterface[MockScope], spec_id: TaskSpecificationId) -> ScopedJobInterface[MockScope]:
     task = next((t for t in job.get_tasks() if t.spec_id == spec_id), None)
     assert task is not None and isinstance(task, ScheduledScopedTask), f"{spec_id} not scheduled"
     job, started = job.start(spec_id, task.current_launch.id, "s", AT)
