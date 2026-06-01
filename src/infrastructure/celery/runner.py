@@ -82,7 +82,15 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
                     raise TaskExecutionError(task_id=task_id, scope_id=scope_id, launch_id=launch_id)
 
             session.commit()
-            service.dispatch_successors(successors=successors, scope_id=scope_id, user=user)
+            try:
+                service.dispatch_successors(successors=successors, scope_id=scope_id, user=user)
+            except Exception as dispatch_err:
+                logger.error(
+                    "Dispatch failed after commit for scope %s — successors may need manual replay: %s",
+                    scope_id,
+                    dispatch_err,
+                    exc_info=dispatch_err,
+                )
         except TaskExecutionError:
             session.rollback()
             raise
