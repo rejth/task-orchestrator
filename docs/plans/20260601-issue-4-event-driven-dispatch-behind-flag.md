@@ -70,10 +70,10 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 4: Block downstream on failure and ensure exactly-once fan-in
 
-- [ ] On a Task failure, dispatch nothing downstream (cascade fail)
-- [ ] Ensure concurrent fan-in completions dispatch the successor exactly once via the per-Job lock
-- [ ] write integration tests covering success, skip, failure, and concurrent fan-in
-- [ ] run project tests - must pass before next task
+- [x] On a Task failure, dispatch nothing downstream (cascade fail)
+- [x] Ensure concurrent fan-in completions dispatch the successor exactly once via the per-Job lock
+- [x] write integration tests covering success, skip, failure, and concurrent fan-in
+- [x] run project tests - must pass before next task
 
 ### Task 5: Verify acceptance criteria
 
