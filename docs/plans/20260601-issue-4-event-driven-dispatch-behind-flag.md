@@ -48,10 +48,10 @@ Method: TDD, red-green, vertical slices (from the parent PRD Testing Decisions).
 
 ### Task 1: Add the feature flag and route between dispatch paths
 
-- [ ] Add a feature flag that selects old-canvas vs new event-driven dispatch, defaulting to the old path
-- [ ] Route the schedule operation through the flag without changing the old path's behavior
-- [ ] write tests asserting the flag routes to each path
-- [ ] run project tests - must pass before next task
+- [x] Add a feature flag that selects old-canvas vs new event-driven dispatch, defaulting to the old path
+- [x] Route the schedule operation through the flag without changing the old path's behavior
+- [x] write tests asserting the flag routes to each path
+- [x] run project tests - must pass before next task
 
 ### Task 2: Dispatch the ready frontier on schedule
 
