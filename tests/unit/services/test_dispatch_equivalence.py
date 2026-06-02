@@ -12,7 +12,7 @@ from dataclasses import replace
 from unittest.mock import MagicMock
 
 from src.domain.job import ScopedJob
-from src.domain.scoped_task import ScheduledScopedTask
+from src.domain.scoped_task import ScheduledScopedTask, SuccessfullyFinishedScopedTask
 from src.domain.task import TaskSpecificationId
 from src.services.make_task_graph import LeafTask, ParallelTasks, SequentialTasks, TaskGraph
 from tests.unit.domain.conftest import AT, JOB_ID, make_scheduled_task, make_spec
@@ -108,7 +108,7 @@ def _assign_waves(seq: SequentialTasks, wave_map: dict, start_wave: int) -> int:
 # Harness: event-driven-path output capture
 # ---------------------------------------------------------------------------
 
-def _complete_task(task: ScheduledScopedTask):
+def _complete_task(task: ScheduledScopedTask) -> SuccessfullyFinishedScopedTask:
     """Transition ScheduledScopedTask → SuccessfullyFinishedScopedTask for simulation."""
     return task.start(message="sim", at=AT).finish(message="sim", at=AT)
 
