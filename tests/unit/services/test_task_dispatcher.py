@@ -91,7 +91,8 @@ def test_signature_args_match_task(dispatcher):
 
         dispatcher.dispatch([task], scope_id=SCOPE_ID, user=USER)
 
-    assert captured_args[0] == (SCOPE_ID, spec.id.value, str(launch_id), USER)
+    # First 4 args are fixed; 5th is expires_at ISO string (tested separately)
+    assert captured_args[0][:4] == (SCOPE_ID, spec.id.value, str(launch_id), USER)
 
 
 def test_empty_task_list_enqueues_nothing(dispatcher):
@@ -136,6 +137,27 @@ def test_enqueued_set_matches_dispatched_tasks(dispatcher):
         dispatcher.dispatch([task_a, task_b], scope_id=SCOPE_ID, user=USER)
 
     assert enqueued_task_ids == {str(launch_id_a), str(launch_id_b)}
+
+
+def test_dispatcher_includes_expires_at_in_args(dispatcher):
+    """Task args include expires_at ISO string so task_runner can detect expiry at processing time."""
+    spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
+    task = make_scheduled_task(spec)
+
+    captured_args: list[tuple] = []
+    before = datetime.datetime.now(datetime.timezone.utc)
+
+    with patch("src.services.task_dispatcher.Signature") as MockSig:
+        MockSig.side_effect = lambda *a, **kw: (captured_args.append(kw.get("args", ())), MagicMock())[1]
+
+        dispatcher.dispatch([task], scope_id=SCOPE_ID, user=USER)
+
+    args = captured_args[0]
+    assert len(args) == 5
+    expires_at_str = args[4]
+    expires_at_dt = datetime.datetime.fromisoformat(expires_at_str)
+    assert expires_at_dt > before
+    assert expires_at_dt <= before + datetime.timedelta(seconds=3601)
 
 
 @pytest.mark.parametrize("bad_expiry", [0, -1, -100])

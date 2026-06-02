@@ -1,0 +1,84 @@
+"""Tests for task_runner expiry detection at queue processing time."""
+import datetime
+from unittest.mock import MagicMock, patch
+
+from src.handlers.interface import TaskHandleStatus
+from src.infrastructure.celery.runner import task_runner
+
+SCOPE_ID = "patient-123"
+TASK_ID = "RELOAD_PATIENT_DATA"
+LAUNCH_ID = "11111111-1111-1111-1111-111111111111"
+USER = "user@example.com"
+
+
+def _make_mock_service():
+    mock_service = MagicMock()
+    # finish_task returns (job, successors) — configure to avoid unpack errors
+    mock_service.finish_task.return_value = (MagicMock(), [])
+    mock_service.skip_task.return_value = (MagicMock(), [])
+    return mock_service
+
+
+def _runner_patches(mock_service):
+    mock_session = MagicMock()
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=False)
+    mock_session_factory = MagicMock(return_value=mock_session)
+    mock_settings = MagicMock()
+    mock_settings.EVENT_DRIVEN_DISPATCH = True
+    mock_settings.CELERY_TASK_CHAIN_EXPIRES = 3600
+
+    return (
+        patch("src.api.config.get_settings", return_value=mock_settings),
+        patch("src.infrastructure.database.session.get_session_factory", return_value=mock_session_factory),
+        patch("src.infrastructure.repositories.jobs_repo.SQLJobsRepository"),
+        patch("src.services.tasks_management_service.TasksManagementService", return_value=mock_service),
+        patch("src.infrastructure.celery.runner._run_handler", return_value=(TaskHandleStatus.SUCCESS, [])),
+        mock_session,
+    )
+
+
+def test_runner_calls_expire_task_when_expires_at_elapsed():
+    mock_service = _make_mock_service()
+    *patches, mock_session = _runner_patches(mock_service)
+    past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)).isoformat()
+
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, past)
+
+    mock_service.expire_task.assert_called_once()
+    mock_service.start_task.assert_not_called()
+
+
+def test_runner_commits_after_expire_task():
+    mock_service = _make_mock_service()
+    *patches, mock_session = _runner_patches(mock_service)
+    past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)).isoformat()
+
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, past)
+
+    mock_session.commit.assert_called_once()
+
+
+def test_runner_does_not_expire_when_expires_at_is_future():
+    mock_service = _make_mock_service()
+    *patches, mock_session = _runner_patches(mock_service)
+    future = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)).isoformat()
+
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, future)
+
+    mock_service.expire_task.assert_not_called()
+    mock_service.start_task.assert_called_once()
+
+
+def test_runner_does_not_expire_when_no_expires_at():
+    mock_service = _make_mock_service()
+    *patches, mock_session = _runner_patches(mock_service)
+
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER)
+
+    mock_service.expire_task.assert_not_called()
+    mock_service.start_task.assert_called_once()

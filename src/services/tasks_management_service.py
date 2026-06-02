@@ -147,6 +147,23 @@ class TasksManagementService:
         )
         return updated_job, successors
 
+    def expire_task(
+        self,
+        scope_id: str,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+    ) -> ScopedJobInterface:
+        job = self._require_job_for_update(scope_id)
+        updated_job = job.fail(
+            task_id=task_id,
+            launch_id=launch_id,
+            message="Task expired while waiting in queue",
+            at=datetime.datetime.now(),
+            is_aborted=True,
+        )
+        self._jobs_repo.update(job=updated_job)
+        return updated_job
+
     def stop_run(self, scope_id: str) -> None:
         job = self._require_job_for_update(scope_id)
         updated_job, launch_ids = job.stop_run(
