@@ -28,4 +28,4 @@ class TaskDispatcher:
             options={"task_id": launch_id},
             immutable=True,
             app=self._broker,
-        ).apply_async()
+        ).apply_async(expires=expires_at)
