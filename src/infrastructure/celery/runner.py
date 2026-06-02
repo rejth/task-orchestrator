@@ -7,7 +7,7 @@ from uuid import UUID
 from celery import Task as CeleryTask
 from celery.exceptions import TaskError
 
-from src.domain.job import InvalidChangeTaskStatusOperation
+from src.domain.job import InvalidChangeTaskStatusOperation, RequiredTaskNotFinished
 from src.domain.journal import Log, LogLevel, UnclassifiedLogRecord
 from src.domain.task import TaskSpecificationId
 from src.handlers.demo import DemoHandler
@@ -69,9 +69,9 @@ def task_runner(
                     )
                     try:
                         service.expire_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
-                    except InvalidChangeTaskStatusOperation:
+                    except (InvalidChangeTaskStatusOperation, RequiredTaskNotFinished):
                         logger.warning(
-                            "Task %s launch %s already finalized, discarding stale expiry",
+                            "Task %s launch %s already finalized or predecessors still active, discarding stale expiry",
                             task_id, launch_id,
                         )
                         return

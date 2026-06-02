@@ -125,6 +125,18 @@ def schedule_task(
         raise HTTPException(status_code=422, detail=str(err))
 
 
+@router.delete("/{scope_id}/run", status_code=204)
+def stop_run(
+    scope_id: UUID,
+    service: TasksManagementService = Depends(get_service),
+) -> Response:
+    try:
+        service.stop_run(scope_id=str(scope_id))
+        return Response(status_code=204)
+    except JobNotFound as err:
+        raise HTTPException(status_code=404, detail=str(err))
+
+
 @router.delete("/{scope_id}/tasks/{task_id}/launches/{launch_id}", status_code=204)
 def abort_task(
     scope_id: UUID,
