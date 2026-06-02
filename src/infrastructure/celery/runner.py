@@ -69,9 +69,15 @@ def task_runner(
                     )
                     try:
                         service.expire_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
-                    except (InvalidChangeTaskStatusOperation, RequiredTaskNotFinished):
+                    except InvalidChangeTaskStatusOperation:
                         logger.warning(
-                            "Task %s launch %s already finalized or predecessors still active, discarding stale expiry",
+                            "Task %s launch %s already finalized, discarding stale expiry",
+                            task_id, launch_id,
+                        )
+                        return
+                    except RequiredTaskNotFinished:
+                        logger.error(
+                            "Task %s launch %s expiry rejected — predecessors not finished (DB inconsistency)",
                             task_id, launch_id,
                         )
                         return

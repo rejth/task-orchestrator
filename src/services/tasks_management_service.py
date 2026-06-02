@@ -1,4 +1,5 @@
 import datetime
+import logging
 from typing import Sequence
 from uuid import UUID, uuid4
 
@@ -16,6 +17,8 @@ from src.domain.scoped_task import (
 from src.domain.task import TaskSpecification, TaskSpecificationId
 from src.services.make_celery_chain import CeleryChainBuilder
 from src.services.task_dispatcher import TaskDispatcher
+
+logger = logging.getLogger(__name__)
 
 
 class JobNotFound(ValueError):
@@ -172,7 +175,12 @@ class TasksManagementService:
         )
         self._jobs_repo.update(job=updated_job)
         for launch_id in launch_ids:
-            self._broker.control.revoke(str(launch_id), terminate=True)
+            try:
+                self._broker.control.revoke(str(launch_id), terminate=True)
+            except Exception:
+                logger.error(
+                    "Failed to revoke Celery task %s — worker may still execute", launch_id, exc_info=True
+                )
 
     def dispatch_successors(self, successors: list[ScheduledScopedTask], scope_id: str, user: str) -> None:
         if successors:
