@@ -67,7 +67,14 @@ def task_runner(
                         "Task %s launch %s expired at %s — finalizing without execution",
                         task_id, launch_id, expires_at,
                     )
-                    service.expire_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
+                    try:
+                        service.expire_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
+                    except InvalidChangeTaskStatusOperation:
+                        logger.warning(
+                            "Task %s launch %s already finalized, discarding stale expiry",
+                            task_id, launch_id,
+                        )
+                        return
                     session.commit()
                     return
 

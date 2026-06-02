@@ -136,8 +136,8 @@ def test_after_stop_run_send_to_queue_enqueues_nothing():
     result.updated_job = updated_job
     svc.send_to_queue(result, user="test@user.com")
 
-    for call in dispatcher.dispatch.call_args_list:
-        assert call.kwargs["tasks"] == []
+    dispatcher.dispatch.assert_called_once()
+    assert dispatcher.dispatch.call_args.kwargs["tasks"] == []
 
 
 # ── RED slice 3: reconciliation sweep skips aborted Tasks ───────────────────

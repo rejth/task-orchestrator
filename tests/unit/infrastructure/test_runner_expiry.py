@@ -3,6 +3,7 @@ import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from src.domain.job import InvalidChangeTaskStatusOperation
 from src.handlers.interface import TaskHandleStatus
 from src.infrastructure.celery.runner import task_runner
 
@@ -72,6 +73,21 @@ def test_runner_does_not_expire_when_expires_at_is_future():
 
     mock_service.expire_task.assert_not_called()
     mock_service.start_task.assert_called_once()
+
+
+def test_runner_discards_stale_expiry_when_task_already_finalized():
+    """Race guard: stop_run may have already failed the task before the worker checks expiry."""
+    mock_service = _make_mock_service()
+    mock_service.expire_task.side_effect = InvalidChangeTaskStatusOperation(MagicMock(), "expire")
+    *patches, mock_session = _runner_patches(mock_service)
+    past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)).isoformat()
+
+    with patches[0], patches[1], patches[2], patches[3], patches[4]:
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, past)  # type: ignore[reportFunctionMemberAccess]
+
+    mock_service.expire_task.assert_called_once()
+    mock_service.start_task.assert_not_called()
+    mock_session.commit.assert_not_called()
 
 
 def test_runner_does_not_expire_when_no_expires_at():

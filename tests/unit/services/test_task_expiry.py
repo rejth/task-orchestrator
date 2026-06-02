@@ -10,7 +10,6 @@ from src.domain.task import TaskSpecificationId as T
 from tests.unit.domain.conftest import make_scheduled_task, make_spec
 from tests.unit.services.test_stop_run import _make_job, _make_service
 
-
 # ── RED slice 2: expired Task detected at queue processing time ──────────────
 
 def test_expire_task_transitions_pending_to_failed():
