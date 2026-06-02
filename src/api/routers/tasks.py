@@ -129,6 +129,7 @@ def schedule_task(
 def stop_run(
     scope_id: UUID,
     service: TasksManagementService = Depends(get_service),
+    api_key: str = Depends(verify_api_key),
 ) -> Response:
     try:
         service.stop_run(scope_id=str(scope_id))
