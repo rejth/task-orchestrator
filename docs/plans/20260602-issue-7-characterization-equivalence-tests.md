@@ -4,7 +4,9 @@
 
 Build an equivalence test gate that proves the new event-driven dispatch is behaviorally equivalent to the old Celery-canvas path before the old layer is removed. Tests run representative scopes through both dispatch paths and assert that the new path dispatches the same set of Tasks and honors the same happens-before (dependency) relationships as the old path.
 
-Tests assert observable orchestration behavior only, not internal structure, so they remain valid after the coercion code is deleted.
+Tests assert observable orchestration behavior only, not internal structure.
+
+NOTE: `test_dispatch_equivalence.py` is intentionally a temporary characterization harness. The canvas-dependent classes (`TestCanvasOutputCapture`, `TestLinearEquivalence`, `TestParallelEquivalence`) and the canvas capture utilities (`collect_canvas_spec_ids`, `canvas_wave_map`) import `TaskGraph`/`LeafTask`/`ParallelTasks`/`SequentialTasks` at module load time. When the Celery-canvas coercion layer is deleted, this entire module must be deleted (or substantially rewritten) alongside it — the top-level import means the module fails to load once `make_task_graph` is removed. The event-driven harness functions (`simulate_event_driven_waves`, `direct_dependency_edges`) and `TestEventDrivenOutputCapture`/`TestFixtureLoading` are reusable but must be migrated to a permanent test file before canvas deletion.
 
 ## Context
 
@@ -21,8 +23,9 @@ Tests assert observable orchestration behavior only, not internal structure, so 
 
 ## Testing Strategy
 
-- Tests must assert observable behavior (dispatched task set + dependency ordering), not internal structure
-- Tests must survive deletion of graph-coercion code
+- Tests assert observable behavior (dispatched task set + dependency ordering), not internal structure
+- Canvas-dependent tests are explicitly temporary; they prove equivalence during the transition period and will be deleted with the canvas layer
+- Event-driven-only tests should be migrated to a permanent location before canvas deletion
 - Run project tests after each task before proceeding
 
 ## Progress Tracking
@@ -62,11 +65,12 @@ Tests assert observable orchestration behavior only, not internal structure, so 
 - [x] Verify the set of dispatched Tasks matches between old and new paths in all covered scopes
 - [x] Verify all dependency (happens-before) relationships are preserved by the new path
 - [x] Verify existing linear and parallel graph fixtures are reused as the oracle
-- [x] Verify tests assert behavior only and survive deletion of graph-coercion code (review for internal-structure coupling)
+- [x] Verify tests assert behavior only (review for internal-structure coupling); canvas-dependent tests are intentionally temporary and must be deleted with the canvas layer — see NOTE and Post-Completion section
 - [x] run full project test suite
 - [x] run project linter - all issues must be fixed
 
 ## Post-Completion
 
 - Coordinate with #4 (feature flag) before enabling the new dispatch path in production
-- After old coercion layer is deleted, confirm tests still pass without modification
+- Before deleting the canvas layer: migrate `simulate_event_driven_waves`, `direct_dependency_edges`, `TestFixtureLoading`, and `TestEventDrivenOutputCapture` to a permanent test file
+- After migrating surviving tests: delete `test_dispatch_equivalence.py` alongside the canvas layer (the top-level import of `TaskGraph`/`LeafTask`/etc. makes the module unloadable once `make_task_graph` is removed)

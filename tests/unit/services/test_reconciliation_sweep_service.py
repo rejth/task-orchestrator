@@ -1,4 +1,5 @@
 """Unit tests for ReconciliationSweepService stalled-task selection query."""
+
 from dataclasses import dataclass
 from unittest.mock import MagicMock
 from uuid import UUID, uuid4
@@ -86,9 +87,7 @@ def _success_task(spec) -> SuccessfullyFinishedScopedTask:
             task_id=task_id,
             message="done",
             journal=[],
-            metadata=SuccessMetadata(
-                scheduled_at=AT, scheduled_by=BY, started_at=AT, finished_at=AT
-            ),
+            metadata=SuccessMetadata(scheduled_at=AT, scheduled_by=BY, started_at=AT, finished_at=AT),
         ),
     )
 
@@ -158,6 +157,7 @@ def _new_task(spec) -> NewScopedTask:
 
 
 # ── selection tests ───────────────────────────────────────────────────────────
+
 
 def test_pending_task_with_no_deps_is_selected():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
@@ -274,6 +274,7 @@ def test_empty_repo_returns_empty_result():
 
 # ── sweep / re-enqueue tests ──────────────────────────────────────────────────
 
+
 def test_sweep_dispatches_stalled_task():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = _scheduled_task(spec)
@@ -322,6 +323,7 @@ def test_sweep_is_idempotent_same_launch_id_used_on_repeat():
 
     broker = MagicMock()
     from src.services.task_dispatcher import TaskDispatcher
+
     real_dispatcher = TaskDispatcher(broker=broker, expiry_seconds=3600)
     service = _make_service([job], dispatcher=real_dispatcher)
 

@@ -1,4 +1,5 @@
 """ScopedJob aggregate root tests."""
+
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
@@ -37,16 +38,35 @@ class MockScope:
 # Plus a parallel branch off RELOAD_PATIENT_DATA:
 # RELOAD_PATIENT_DATA → RELOAD_SOMATIC_MUTATIONS (independent of treatment chain)
 
+
 def make_fresh_job() -> ScopedJob[MockScope]:
     return ScopedJob[MockScope](
         id=JOB_ID,
         scope=MockScope(),
         tasks=[
             NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_PATIENT_DATA)),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.EXPORT_TREATMENTS, depends_on=[T.RELOAD_MATCHED_TREATMENTS])),
-            NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.PUSH_MATCHED_TREATMENTS, depends_on=[T.EXPORT_TREATMENTS])),
+            NewScopedTask(
+                id=uuid4(),
+                job_id=JOB_ID,
+                specification=make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA]),
+            ),
+            NewScopedTask(
+                id=uuid4(),
+                job_id=JOB_ID,
+                specification=make_spec(
+                    T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS]
+                ),
+            ),
+            NewScopedTask(
+                id=uuid4(),
+                job_id=JOB_ID,
+                specification=make_spec(T.EXPORT_TREATMENTS, depends_on=[T.RELOAD_MATCHED_TREATMENTS]),
+            ),
+            NewScopedTask(
+                id=uuid4(),
+                job_id=JOB_ID,
+                specification=make_spec(T.PUSH_MATCHED_TREATMENTS, depends_on=[T.EXPORT_TREATMENTS]),
+            ),
         ],
     )
 
@@ -108,7 +128,8 @@ def test_fail_new_task_raises():
 
 def test_task_not_found_raises():
     single: ScopedJob[MockScope] = ScopedJob(
-        id=JOB_ID, scope=MockScope(),
+        id=JOB_ID,
+        scope=MockScope(),
         tasks=[NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=make_spec(T.RELOAD_PATIENT_DATA))],
     )
     with pytest.raises(TaskNotFound):
@@ -119,7 +140,9 @@ def test_schedule_already_scheduled_task_raises():
     job = make_fresh_job()
     result = job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="go", at=AT, by=BY)
     with pytest.raises(InvalidChangeTaskStatusOperation):
-        result.updated_job.schedule(task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="again", at=AT, by=BY)
+        result.updated_job.schedule(
+            task_id=T.RELOAD_PATIENT_DATA, launch_id_generator=uuid4, message="again", at=AT, by=BY
+        )
 
 
 def test_fail_with_wrong_launch_id_raises():
@@ -133,6 +156,7 @@ def test_fail_with_wrong_launch_id_raises():
 
 
 # ── dispatchable_tasks ────────────────────────────────────────────────────────
+
 
 def _succeed(job: ScopedJobInterface[MockScope], spec_id: TaskSpecificationId) -> ScopedJobInterface[MockScope]:
     task = next((t for t in job.get_tasks() if t.spec_id == spec_id), None)

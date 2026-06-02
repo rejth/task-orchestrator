@@ -24,6 +24,7 @@ T = TaskSpecificationId
 # Oracle fixtures (reuse same spec structure as existing domain graph tests)
 # ---------------------------------------------------------------------------
 
+
 def _make_linear_sequence() -> list[ScheduledScopedTask]:
     """Chain: RELOAD_PATIENT_DATA → RELOAD_MATCHED_TREATMENTS → EXPORT_TREATMENTS → PUSH_MATCHED_TREATMENTS"""
     return [
@@ -52,6 +53,7 @@ def _make_diamond() -> list[ScheduledScopedTask]:
 # ---------------------------------------------------------------------------
 # Harness: canvas-path output capture
 # ---------------------------------------------------------------------------
+
 
 def collect_canvas_spec_ids(seq: SequentialTasks) -> set[TaskSpecificationId]:
     """Walk a SequentialTasks graph and return every spec_id present."""
@@ -108,6 +110,7 @@ def _assign_waves(seq: SequentialTasks, wave_map: dict, start_wave: int) -> int:
 # Harness: event-driven-path output capture
 # ---------------------------------------------------------------------------
 
+
 def _complete_task(task: ScheduledScopedTask) -> SuccessfullyFinishedScopedTask:
     """Transition ScheduledScopedTask → SuccessfullyFinishedScopedTask for simulation."""
     return task.start(message="sim", at=AT).finish(message="sim", at=AT)
@@ -145,20 +148,18 @@ def simulate_event_driven_waves(tasks: list[ScheduledScopedTask]) -> dict[TaskSp
 # Helper: extract direct dependency edges from task specs
 # ---------------------------------------------------------------------------
 
+
 def direct_dependency_edges(
     tasks: list[ScheduledScopedTask],
 ) -> set[tuple[TaskSpecificationId, TaskSpecificationId]]:
     """Return {(pred, succ)} for every explicit depends_on relationship."""
-    return {
-        (pred_id, task.spec_id)
-        for task in tasks
-        for pred_id in task.specification.depends_on
-    }
+    return {(pred_id, task.spec_id) for task in tasks for pred_id in task.specification.depends_on}
 
 
 # ---------------------------------------------------------------------------
 # Tests: fixture loading
 # ---------------------------------------------------------------------------
+
 
 class TestFixtureLoading:
     def test_linear_fixture_produces_four_scheduled_tasks(self):
@@ -196,6 +197,7 @@ class TestFixtureLoading:
 # ---------------------------------------------------------------------------
 # Tests: canvas output capture
 # ---------------------------------------------------------------------------
+
 
 class TestCanvasOutputCapture:
     def test_collect_spec_ids_linear(self):
@@ -265,6 +267,7 @@ class TestCanvasOutputCapture:
 # Tests: event-driven output capture
 # ---------------------------------------------------------------------------
 
+
 class TestEventDrivenOutputCapture:
     def test_simulation_linear_covers_all_tasks(self):
         tasks = _make_linear_sequence()
@@ -312,6 +315,7 @@ class TestEventDrivenOutputCapture:
 # Fixtures: additional linear sequences for edge-case coverage
 # ---------------------------------------------------------------------------
 
+
 def _make_two_node_chain() -> list[ScheduledScopedTask]:
     """Chain of length 2: RELOAD_PATIENT_DATA → RELOAD_MATCHED_TREATMENTS"""
     return [
@@ -323,6 +327,7 @@ def _make_two_node_chain() -> list[ScheduledScopedTask]:
 # ---------------------------------------------------------------------------
 # Tests: linear equivalence assertions (Task 2)
 # ---------------------------------------------------------------------------
+
 
 class TestLinearEquivalence:
     """Both dispatch paths produce the same observable behavior for linear graphs."""
@@ -380,12 +385,11 @@ class TestLinearEquivalence:
         event_waves = simulate_event_driven_waves(tasks)
         spec_ids = list(canvas_waves.keys())
         for i, a in enumerate(spec_ids):
-            for b in spec_ids[i + 1:]:
+            for b in spec_ids[i + 1 :]:
                 canvas_before = canvas_waves[a] < canvas_waves[b]
                 event_before = event_waves[a] < event_waves[b]
                 assert canvas_before == event_before, (
-                    f"ordering disagreement for {a} vs {b}: "
-                    f"canvas_before={canvas_before}, event_before={event_before}"
+                    f"ordering disagreement for {a} vs {b}: canvas_before={canvas_before}, event_before={event_before}"
                 )
 
     def test_two_node_chain_relative_order_equivalent(self):
@@ -411,6 +415,7 @@ class TestLinearEquivalence:
 # Fixtures: parallel graph shapes for Task 3
 # ---------------------------------------------------------------------------
 
+
 def _make_sibling_parallel() -> list[ScheduledScopedTask]:
     """Fan-out (no fan-in): RELOAD_PATIENT_DATA → (RELOAD_SOMATIC ∥ RELOAD_GERMLINE ∥ RELOAD_HLA_ALLELES)"""
     return [
@@ -424,6 +429,7 @@ def _make_sibling_parallel() -> list[ScheduledScopedTask]:
 # ---------------------------------------------------------------------------
 # Tests: parallel equivalence assertions (Task 3)
 # ---------------------------------------------------------------------------
+
 
 class TestParallelEquivalence:
     """Both dispatch paths produce the same observable behavior for parallel graphs."""
@@ -526,7 +532,7 @@ class TestParallelEquivalence:
         event_waves = simulate_event_driven_waves(tasks)
         spec_ids = list(canvas_waves.keys())
         for i, a in enumerate(spec_ids):
-            for b in spec_ids[i + 1:]:
+            for b in spec_ids[i + 1 :]:
                 canvas_a_lt_b = canvas_waves[a] < canvas_waves[b]
                 canvas_b_lt_a = canvas_waves[b] < canvas_waves[a]
                 event_a_lt_b = event_waves[a] < event_waves[b]

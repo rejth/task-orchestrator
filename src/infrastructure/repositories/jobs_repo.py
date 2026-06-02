@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 # ── domain ← model mappers ────────────────────────────────────────────────────
 
+
 def _log_record_to_domain(model: ExecutionLogRecordModel) -> LaunchLogRecord:
     if model.type == LogType.FILE and model.file:
         log = FileLogRecord(
@@ -215,6 +216,7 @@ def _task_to_domain(model: ScopedTaskModel, *, lightweight: bool = False) -> Sco
 
 # ── model ← domain mappers ────────────────────────────────────────────────────
 
+
 def _apply_launch_to_model(launch: TaskLaunch, model: TaskLaunchModel) -> None:
     model.status = launch.status
     match launch:
@@ -254,6 +256,7 @@ def _create_launch_model(launch: TaskLaunch) -> TaskLaunchModel:
 
 
 # ── repository ────────────────────────────────────────────────────────────────
+
 
 class SQLJobsRepository:
     def __init__(self, session: Session):
@@ -404,9 +407,11 @@ class SQLJobsRepository:
             )
             self._session.add(entry)
             if isinstance(log, FileLogRecord):
-                self._session.add(LogFileModel(
-                    log_id=log_record.id,
-                    filename=log.filename,
-                    extension=log.extension,
-                    data=log.data,
-                ))
+                self._session.add(
+                    LogFileModel(
+                        log_id=log_record.id,
+                        filename=log.filename,
+                        extension=log.extension,
+                        data=log.data,
+                    )
+                )

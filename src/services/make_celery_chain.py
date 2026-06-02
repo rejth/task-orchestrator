@@ -9,6 +9,7 @@ from src.services.make_task_graph import LeafTask, ParallelTasks, SequentialTask
 
 TASK_NAME = "task_runner"
 
+
 class CeleryChainBuilder:
     def __init__(self, job: ScopedJobInterface, user: str, chain_expires_seconds: int, broker: Celery):
         self._job = job
