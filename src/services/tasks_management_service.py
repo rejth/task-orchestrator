@@ -179,7 +179,7 @@ class TasksManagementService:
             try:
                 self._broker.control.revoke(str(launch_id), terminate=True)
             except Exception:
-                logger.error(
+                logger.warning(
                     "Failed to revoke Celery task %s — worker may still execute", launch_id, exc_info=True
                 )
 
