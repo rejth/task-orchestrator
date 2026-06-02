@@ -306,3 +306,102 @@ class TestEventDrivenOutputCapture:
         waves = simulate_event_driven_waves(tasks)
         assert waves[T.RELOAD_SOMATIC_MUTATIONS] < waves[T.RELOAD_MATCHED_TREATMENTS]
         assert waves[T.RELOAD_GERMLINE_MUTATIONS] < waves[T.RELOAD_MATCHED_TREATMENTS]
+
+
+# ---------------------------------------------------------------------------
+# Fixtures: additional linear sequences for edge-case coverage
+# ---------------------------------------------------------------------------
+
+def _make_two_node_chain() -> list[ScheduledScopedTask]:
+    """Chain of length 2: RELOAD_PATIENT_DATA → RELOAD_MATCHED_TREATMENTS"""
+    return [
+        make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA)),
+        make_scheduled_task(make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA])),
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Tests: linear equivalence assertions (Task 2)
+# ---------------------------------------------------------------------------
+
+class TestLinearEquivalence:
+    """Both dispatch paths produce the same observable behavior for linear graphs."""
+
+    # -- task-set equivalence -------------------------------------------------
+
+    def test_four_node_chain_task_sets_match(self):
+        tasks = _make_linear_sequence()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_ids = collect_canvas_spec_ids(graph)
+        event_ids = set(simulate_event_driven_waves(tasks).keys())
+        assert canvas_ids == event_ids
+
+    def test_single_node_task_sets_match(self):
+        tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
+        graph = TaskGraph(tasks).make_graph()
+        canvas_ids = collect_canvas_spec_ids(graph)
+        event_ids = set(simulate_event_driven_waves(tasks).keys())
+        assert canvas_ids == event_ids
+
+    def test_two_node_chain_task_sets_match(self):
+        tasks = _make_two_node_chain()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_ids = collect_canvas_spec_ids(graph)
+        event_ids = set(simulate_event_driven_waves(tasks).keys())
+        assert canvas_ids == event_ids
+
+    # -- happens-before equivalence -------------------------------------------
+
+    def test_four_node_chain_happens_before_preserved(self):
+        tasks = _make_linear_sequence()
+        event_waves = simulate_event_driven_waves(tasks)
+        for pred_id, succ_id in direct_dependency_edges(tasks):
+            assert event_waves[pred_id] < event_waves[succ_id], (
+                f"event-driven violated dependency {pred_id} → {succ_id}: "
+                f"wave {event_waves[pred_id]} not < {event_waves[succ_id]}"
+            )
+
+    def test_two_node_chain_happens_before_preserved(self):
+        tasks = _make_two_node_chain()
+        event_waves = simulate_event_driven_waves(tasks)
+        assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
+
+    def test_single_node_no_dependency_edges(self):
+        tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
+        assert direct_dependency_edges(tasks) == set()
+
+    # -- ordering equivalence (canvas order == event-driven order) ------------
+
+    def test_four_node_chain_relative_order_equivalent(self):
+        """For every pair of tasks, canvas and event-driven agree on which comes first."""
+        tasks = _make_linear_sequence()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        spec_ids = list(canvas_waves.keys())
+        for i, a in enumerate(spec_ids):
+            for b in spec_ids[i + 1:]:
+                canvas_before = canvas_waves[a] < canvas_waves[b]
+                event_before = event_waves[a] < event_waves[b]
+                assert canvas_before == event_before, (
+                    f"ordering disagreement for {a} vs {b}: "
+                    f"canvas_before={canvas_before}, event_before={event_before}"
+                )
+
+    def test_two_node_chain_relative_order_equivalent(self):
+        tasks = _make_two_node_chain()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        assert (canvas_waves[T.RELOAD_PATIENT_DATA] < canvas_waves[T.RELOAD_MATCHED_TREATMENTS]) == (
+            event_waves[T.RELOAD_PATIENT_DATA] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
+        )
+
+    def test_single_node_equivalence(self):
+        tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        assert set(canvas_waves.keys()) == set(event_waves.keys())
+        assert canvas_waves[T.RELOAD_PATIENT_DATA] == 0
+        assert event_waves[T.RELOAD_PATIENT_DATA] == 0

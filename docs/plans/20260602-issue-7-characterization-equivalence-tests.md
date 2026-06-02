@@ -42,11 +42,11 @@ Tests assert observable orchestration behavior only, not internal structure, so 
 
 ### Task 2: Implement equivalence assertions for linear graph scopes
 
-- [ ] Run representative linear graph fixtures through both dispatch paths
-- [ ] Assert that the set of dispatched Tasks matches between old and new for linear graphs
-- [ ] Assert that all dependency (happens-before) relationships are preserved by the new path for linear graphs
-- [ ] Write tests covering edge cases (single-node graph, chain of length >1)
-- [ ] run project tests - must pass before next task
+- [x] Run representative linear graph fixtures through both dispatch paths
+- [x] Assert that the set of dispatched Tasks matches between old and new for linear graphs
+- [x] Assert that all dependency (happens-before) relationships are preserved by the new path for linear graphs
+- [x] Write tests covering edge cases (single-node graph, chain of length >1)
+- [x] run project tests - must pass before next task
 
 ### Task 3: Implement equivalence assertions for parallel graph scopes
 
