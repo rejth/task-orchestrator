@@ -48,13 +48,13 @@ Method from `docs/prd/event-driven-dispatch/event-driven-dispatch.md`:
 
 ### Task 2: Per-task expiry
 
-- [ ] RED: write unit test — Task dispatched by the dispatcher carries a per-Task expiry timestamp
-- [ ] GREEN: attach expiry when building Celery signature in the dispatcher
-- [ ] RED: write test — a Task whose expiry has elapsed is detected at queue processing time
-- [ ] GREEN: implement expiry detection
-- [ ] RED: write test — an expired Task is finalized as revoked then failed
-- [ ] GREEN: implement expiry finalization (revoked → failed transition)
-- [ ] run project tests - must pass before next task
+- [x] RED: write unit test — Task dispatched by the dispatcher carries a per-Task expiry timestamp
+- [x] GREEN: attach expiry when building Celery signature in the dispatcher
+- [x] RED: write test — a Task whose expiry has elapsed is detected at queue processing time
+- [x] GREEN: implement expiry detection
+- [x] RED: write test — an expired Task is finalized as revoked then failed
+- [x] GREEN: implement expiry finalization (revoked → failed transition)
+- [x] run project tests - must pass before next task
 
 ### Task 3: Verify acceptance criteria
 
