@@ -147,6 +147,16 @@ class TasksManagementService:
         )
         return updated_job, successors
 
+    def stop_run(self, scope_id: str) -> None:
+        job = self._require_job_for_update(scope_id)
+        updated_job, launch_ids = job.stop_run(
+            message="Run was stopped",
+            at=datetime.datetime.now(),
+        )
+        self._jobs_repo.update(job=updated_job)
+        for launch_id in launch_ids:
+            self._broker.control.revoke(str(launch_id), terminate=True)
+
     def dispatch_successors(self, successors: list[ScheduledScopedTask], scope_id: str, user: str) -> None:
         if successors:
             self._dispatcher.dispatch(tasks=successors, scope_id=scope_id, user=user)

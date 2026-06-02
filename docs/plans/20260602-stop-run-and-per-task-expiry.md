@@ -36,15 +36,15 @@ Method from `docs/prd/event-driven-dispatch/event-driven-dispatch.md`:
 
 ### Task 1: Stop-run operation
 
-- [ ] RED: write integration test — stop a Job, assert all non-terminal Tasks transition to aborted
-- [ ] GREEN: implement `stop_run(job_id)` acquiring per-Job lock and cascade-aborting non-terminal Tasks
-- [ ] RED: write test — after stop-run, dispatch path does not enqueue aborted Tasks
-- [ ] GREEN: guard dispatch path to skip aborted Tasks
-- [ ] RED: write test — after stop-run, reconciliation sweep skips aborted Tasks
-- [ ] GREEN: guard reconciliation sweep to exclude aborted Tasks
-- [ ] RED: write test — running Launches are revoked when stop-run is called
-- [ ] GREEN: revoke running Launches inside stop-run
-- [ ] run project tests - must pass before next task
+- [x] RED: write integration test — stop a Job, assert all non-terminal Tasks transition to aborted
+- [x] GREEN: implement `stop_run(job_id)` acquiring per-Job lock and cascade-aborting non-terminal Tasks
+- [x] RED: write test — after stop-run, dispatch path does not enqueue aborted Tasks
+- [x] GREEN: guard dispatch path to skip aborted Tasks
+- [x] RED: write test — after stop-run, reconciliation sweep skips aborted Tasks
+- [x] GREEN: guard reconciliation sweep to exclude aborted Tasks
+- [x] RED: write test — running Launches are revoked when stop-run is called
+- [x] GREEN: revoke running Launches inside stop-run
+- [x] run project tests - must pass before next task
 
 ### Task 2: Per-task expiry
 
