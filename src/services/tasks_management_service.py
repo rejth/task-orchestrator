@@ -56,7 +56,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id_generator=uuid4,
             message="Task was scheduled",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
             by=user,
         )
         self._jobs_repo.update(job=result.updated_job)
@@ -87,7 +87,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was started",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=started_task)
         return updated_job
@@ -104,7 +104,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was successfully finished",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=finished_task)
         successors = (
@@ -124,7 +124,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was aborted",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
             is_aborted=is_aborted,
         )
         self._jobs_repo.update(job=updated_job)
@@ -142,7 +142,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was skipped",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=skipped_task)
         successors = (
@@ -161,7 +161,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task expired while waiting in queue",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
             is_aborted=True,
         )
         self._jobs_repo.update(job=updated_job)
@@ -171,7 +171,7 @@ class TasksManagementService:
         job = self._require_job_for_update(scope_id)
         updated_job, launch_ids = job.stop_run(
             message="Run was stopped",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update(job=updated_job)
         self._jobs_repo.commit()
