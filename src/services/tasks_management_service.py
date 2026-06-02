@@ -161,7 +161,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task expired while waiting in queue",
-            at=datetime.datetime.now(datetime.timezone.utc),
+            at=datetime.datetime.now(),
             is_aborted=True,
         )
         self._jobs_repo.update(job=updated_job)
@@ -171,7 +171,7 @@ class TasksManagementService:
         job = self._require_job_for_update(scope_id)
         updated_job, launch_ids = job.stop_run(
             message="Run was stopped",
-            at=datetime.datetime.now(datetime.timezone.utc),
+            at=datetime.datetime.now(),
         )
         self._jobs_repo.update(job=updated_job)
         self._jobs_repo.commit()

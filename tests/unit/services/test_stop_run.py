@@ -13,7 +13,7 @@ from src.domain.task import TaskSpecification
 from src.domain.task import TaskSpecificationId as T
 from src.services.reconciliation_sweep_service import ReconciliationSweepService
 from src.services.tasks_management_service import TasksManagementService
-from tests.unit.domain.conftest import AT, make_scheduled_task, make_spec
+from tests.unit.domain.conftest import AT, make_new_task, make_scheduled_task, make_spec
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,21 @@ def test_stop_run_aborts_all_non_terminal_tasks():
     for task in updated_job.get_tasks():
         assert isinstance(task, FailedScopedTask)
         assert task.latest_launch.metadata.is_aborted is True
+
+
+def test_stop_run_aborts_new_task():
+    spec = make_spec(T.RELOAD_PATIENT_DATA)
+    task = make_new_task(spec)
+    job = _make_job("scope-1", [task])
+
+    repo = MagicMock()
+    repo.find_by_scope_id_for_update.return_value = job
+    _make_service(repo).stop_run("scope-1")
+
+    updated_job = repo.update.call_args.kwargs["job"]
+    (aborted,) = updated_job.get_tasks()
+    assert isinstance(aborted, FailedScopedTask)
+    assert aborted.latest_launch.metadata.is_aborted is True
 
 
 def test_stop_run_leaves_terminal_tasks_unchanged():
