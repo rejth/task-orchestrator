@@ -3,37 +3,18 @@
 Integration-style: exercises real ScopedJob domain object + real service;
 only the repo and Celery broker are mocked.
 """
-from dataclasses import dataclass
 from unittest.mock import MagicMock
-from uuid import uuid4
 
-from src.domain.job import ScopedJob
 from src.domain.scoped_task import FailedScopedTask, StartedScopedTask, SuccessfullyFinishedScopedTask
 from src.domain.task import TaskSpecification
 from src.domain.task import TaskSpecificationId as T
 from src.services.reconciliation_sweep_service import ReconciliationSweepService
-from src.services.tasks_management_service import TasksManagementService
 from tests.unit.domain.conftest import AT, make_new_task, make_scheduled_task, make_spec
-
-
-@dataclass(frozen=True)
-class FakeScope:
-    _id: str
-
-    def get_id(self) -> str:
-        return self._id
-
-
-def _make_job(scope_id: str, tasks: list) -> ScopedJob:
-    return ScopedJob(id=uuid4(), scope=FakeScope(scope_id), tasks=tasks)
+from tests.unit.services.conftest import _make_job, _make_service
 
 
 def _make_started_task(spec: TaskSpecification) -> StartedScopedTask:
     return make_scheduled_task(spec).start(message="started", at=AT)
-
-
-def _make_service(repo, broker=None, **kwargs) -> TasksManagementService:
-    return TasksManagementService(jobs_repo=repo, broker=broker or MagicMock(), **kwargs)
 
 
 # ── RED slice 1: stop Job, all non-terminal Tasks transition to aborted ──────
