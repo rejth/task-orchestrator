@@ -33,7 +33,9 @@ class TaskExecutionError(TaskError):
 
 
 @celery_app.task(name=TASK_NAME, bind=True, max_retries=0)
-def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, user: str, expires_at: str | None = None) -> None:
+def task_runner(
+    self: CeleryTask, scope_id: str, task_id: str, launch_id: str, user: str, expires_at: str | None = None
+) -> None:
     logger.info("Starting task %s launch %s for scope %s", task_id, launch_id, scope_id)
     task_spec_id = TaskSpecificationId(task_id)
     launch_uuid = UUID(launch_id)
@@ -61,7 +63,10 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
             if expires_at:
                 now = datetime.datetime.now(datetime.timezone.utc)
                 if datetime.datetime.fromisoformat(expires_at) <= now:
-                    logger.info("Task %s launch %s expired at %s — finalizing without execution", task_id, launch_id, expires_at)
+                    logger.info(
+                        "Task %s launch %s expired at %s — finalizing without execution",
+                        task_id, launch_id, expires_at,
+                    )
                     service.expire_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
                     session.commit()
                     return

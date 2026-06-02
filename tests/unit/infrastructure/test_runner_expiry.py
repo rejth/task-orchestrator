@@ -1,5 +1,6 @@
 """Tests for task_runner expiry detection at queue processing time."""
 import datetime
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from src.handlers.interface import TaskHandleStatus
@@ -11,7 +12,7 @@ LAUNCH_ID = "11111111-1111-1111-1111-111111111111"
 USER = "user@example.com"
 
 
-def _make_mock_service():
+def _make_mock_service() -> MagicMock:
     mock_service = MagicMock()
     # finish_task returns (job, successors) — configure to avoid unpack errors
     mock_service.finish_task.return_value = (MagicMock(), [])
@@ -19,7 +20,7 @@ def _make_mock_service():
     return mock_service
 
 
-def _runner_patches(mock_service):
+def _runner_patches(mock_service: MagicMock) -> tuple[Any, ...]:
     mock_session = MagicMock()
     mock_session.__enter__ = MagicMock(return_value=mock_session)
     mock_session.__exit__ = MagicMock(return_value=False)
@@ -44,7 +45,7 @@ def test_runner_calls_expire_task_when_expires_at_elapsed():
     past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)).isoformat()
 
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, past)
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, past)  # type: ignore[reportFunctionMemberAccess]
 
     mock_service.expire_task.assert_called_once()
     mock_service.start_task.assert_not_called()
@@ -56,7 +57,7 @@ def test_runner_commits_after_expire_task():
     past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)).isoformat()
 
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, past)
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, past)  # type: ignore[reportFunctionMemberAccess]
 
     mock_session.commit.assert_called_once()
 
@@ -67,7 +68,7 @@ def test_runner_does_not_expire_when_expires_at_is_future():
     future = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)).isoformat()
 
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, future)
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER, future)  # type: ignore[reportFunctionMemberAccess]
 
     mock_service.expire_task.assert_not_called()
     mock_service.start_task.assert_called_once()
@@ -78,7 +79,7 @@ def test_runner_does_not_expire_when_no_expires_at():
     *patches, mock_session = _runner_patches(mock_service)
 
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER)
+        task_runner.run(SCOPE_ID, TASK_ID, LAUNCH_ID, USER)  # type: ignore[reportFunctionMemberAccess]
 
     mock_service.expire_task.assert_not_called()
     mock_service.start_task.assert_called_once()
