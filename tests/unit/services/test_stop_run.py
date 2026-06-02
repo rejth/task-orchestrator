@@ -8,7 +8,8 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from src.domain.job import ScopedJob
-from src.domain.scoped_task import FailedScopedTask, SuccessfullyFinishedScopedTask
+from src.domain.scoped_task import FailedScopedTask, StartedScopedTask, SuccessfullyFinishedScopedTask
+from src.domain.task import TaskSpecification
 from src.domain.task import TaskSpecificationId as T
 from src.services.reconciliation_sweep_service import ReconciliationSweepService
 from src.services.tasks_management_service import TasksManagementService
@@ -27,7 +28,7 @@ def _make_job(scope_id: str, tasks: list) -> ScopedJob:
     return ScopedJob(id=uuid4(), scope=FakeScope(scope_id), tasks=tasks)
 
 
-def _make_started_task(spec):
+def _make_started_task(spec: TaskSpecification) -> StartedScopedTask:
     return make_scheduled_task(spec).start(message="started", at=AT)
 
 
