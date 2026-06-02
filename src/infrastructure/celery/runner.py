@@ -52,6 +52,7 @@ def task_runner(
     settings = get_settings()
 
     with SessionLocal() as session:
+        expired = False
         try:
             jobs_repo = SQLJobsRepository(session=session)
             service = TasksManagementService(
@@ -61,7 +62,7 @@ def task_runner(
                 event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
             )
 
-            expired = False
+
             if expires_at:
                 now = datetime.datetime.now(datetime.timezone.utc)
                 if datetime.datetime.fromisoformat(expires_at) <= now:

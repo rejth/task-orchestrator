@@ -58,13 +58,13 @@ Tests assert observable orchestration behavior only, not internal structure, so 
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Verify equivalence tests run representative scopes through both dispatch paths
-- [ ] Verify the set of dispatched Tasks matches between old and new paths in all covered scopes
-- [ ] Verify all dependency (happens-before) relationships are preserved by the new path
-- [ ] Verify existing linear and parallel graph fixtures are reused as the oracle
-- [ ] Verify tests assert behavior only and survive deletion of graph-coercion code (review for internal-structure coupling)
-- [ ] run full project test suite
-- [ ] run project linter - all issues must be fixed
+- [x] Verify equivalence tests run representative scopes through both dispatch paths
+- [x] Verify the set of dispatched Tasks matches between old and new paths in all covered scopes
+- [x] Verify all dependency (happens-before) relationships are preserved by the new path
+- [x] Verify existing linear and parallel graph fixtures are reused as the oracle
+- [x] Verify tests assert behavior only and survive deletion of graph-coercion code (review for internal-structure coupling)
+- [x] run full project test suite
+- [x] run project linter - all issues must be fixed
 
 ## Post-Completion
 
