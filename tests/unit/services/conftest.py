@@ -1,4 +1,5 @@
 """Shared helpers for service-layer unit tests."""
+
 from dataclasses import dataclass
 from unittest.mock import MagicMock
 from uuid import uuid4

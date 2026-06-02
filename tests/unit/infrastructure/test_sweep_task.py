@@ -1,4 +1,5 @@
 """Tests for the reconciliation_sweep Celery periodic task wiring."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,6 +35,7 @@ def test_sweep_task_name():
 
 def test_beat_schedule_contains_sweep_entry():
     from src.infrastructure.celery.app import get_celery_app
+
     app = get_celery_app()
     schedule = app.conf.beat_schedule
     assert "reconciliation-sweep" in schedule
@@ -44,6 +46,7 @@ def test_beat_schedule_contains_sweep_entry():
 def test_beat_schedule_interval_matches_settings():
     from src.api.config import get_settings
     from src.infrastructure.celery.app import get_celery_app
+
     settings = get_settings()
     app = get_celery_app()
     entry = app.conf.beat_schedule["reconciliation-sweep"]

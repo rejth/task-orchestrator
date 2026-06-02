@@ -3,6 +3,7 @@
 Integration-style: exercises real ScopedJob domain object + real service;
 only the repo and Celery broker are mocked.
 """
+
 from unittest.mock import MagicMock
 
 from src.domain.scoped_task import FailedScopedTask
@@ -11,6 +12,7 @@ from tests.unit.domain.conftest import make_scheduled_task, make_spec
 from tests.unit.services.conftest import _make_job, _make_service
 
 # ── RED slice 2: expired Task detected at queue processing time ──────────────
+
 
 def test_expire_task_transitions_pending_to_failed():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
@@ -28,6 +30,7 @@ def test_expire_task_transitions_pending_to_failed():
 
 
 # ── RED slice 3: expired Task finalized as revoked then failed ───────────────
+
 
 def test_expire_task_sets_aborted_flag():
     spec = make_spec(T.RELOAD_PATIENT_DATA)

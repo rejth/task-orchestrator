@@ -2,6 +2,7 @@
 
 Chain: RELOAD_PATIENT_DATA → RELOAD_MATCHED_TREATMENTS → EXPORT_TREATMENTS → PUSH_MATCHED_TREATMENTS
 """
+
 from src.domain.task import TaskSpecificationId
 from src.services.make_task_graph import LeafTask, SequentialTasks, TaskGraph
 from tests.unit.domain.conftest import make_scheduled_task, make_spec
