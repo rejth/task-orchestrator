@@ -77,8 +77,8 @@ def task_runner(
                         )
                         return
                     except RequiredTaskNotFinished:
-                        logger.error(
-                            "Task %s launch %s expiry rejected — predecessors not finished (DB inconsistency)",
+                        logger.warning(
+                            "Task %s launch %s expiry skipped — predecessor still in-flight (stop_run race)",
                             task_id, launch_id,
                         )
                         return
