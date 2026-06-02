@@ -50,11 +50,11 @@ Tests assert observable orchestration behavior only, not internal structure, so 
 
 ### Task 3: Implement equivalence assertions for parallel graph scopes
 
-- [ ] Run representative parallel graph fixtures through both dispatch paths
-- [ ] Assert that the set of dispatched Tasks matches between old and new for parallel graphs
-- [ ] Assert that all happens-before relationships are preserved for parallel graphs (fan-out, fan-in)
-- [ ] Write tests covering edge cases (diamond dependency, sibling parallelism)
-- [ ] run project tests - must pass before next task
+- [x] Run representative parallel graph fixtures through both dispatch paths
+- [x] Assert that the set of dispatched Tasks matches between old and new for parallel graphs
+- [x] Assert that all happens-before relationships are preserved for parallel graphs (fan-out, fan-in)
+- [x] Write tests covering edge cases (diamond dependency, sibling parallelism)
+- [x] run project tests - must pass before next task
 
 ### Task 4: Verify acceptance criteria
 

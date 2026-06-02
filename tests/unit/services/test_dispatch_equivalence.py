@@ -405,3 +405,135 @@ class TestLinearEquivalence:
         assert set(canvas_waves.keys()) == set(event_waves.keys())
         assert canvas_waves[T.RELOAD_PATIENT_DATA] == 0
         assert event_waves[T.RELOAD_PATIENT_DATA] == 0
+
+
+# ---------------------------------------------------------------------------
+# Fixtures: parallel graph shapes for Task 3
+# ---------------------------------------------------------------------------
+
+def _make_sibling_parallel() -> list[ScheduledScopedTask]:
+    """Fan-out (no fan-in): RELOAD_PATIENT_DATA → (RELOAD_SOMATIC ∥ RELOAD_GERMLINE ∥ RELOAD_HLA_ALLELES)"""
+    return [
+        make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA)),
+        make_scheduled_task(make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])),
+        make_scheduled_task(make_spec(T.RELOAD_GERMLINE_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])),
+        make_scheduled_task(make_spec(T.RELOAD_HLA_ALLELES, depends_on=[T.RELOAD_PATIENT_DATA])),
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Tests: parallel equivalence assertions (Task 3)
+# ---------------------------------------------------------------------------
+
+class TestParallelEquivalence:
+    """Both dispatch paths produce the same observable behavior for parallel graphs."""
+
+    # -- task-set equivalence -------------------------------------------------
+
+    def test_diamond_task_sets_match(self):
+        tasks = _make_diamond()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_ids = collect_canvas_spec_ids(graph)
+        event_ids = set(simulate_event_driven_waves(tasks).keys())
+        assert canvas_ids == event_ids
+
+    def test_sibling_parallel_task_sets_match(self):
+        tasks = _make_sibling_parallel()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_ids = collect_canvas_spec_ids(graph)
+        event_ids = set(simulate_event_driven_waves(tasks).keys())
+        assert canvas_ids == event_ids
+
+    # -- happens-before equivalence -------------------------------------------
+
+    def test_diamond_happens_before_preserved(self):
+        tasks = _make_diamond()
+        event_waves = simulate_event_driven_waves(tasks)
+        for pred_id, succ_id in direct_dependency_edges(tasks):
+            assert event_waves[pred_id] < event_waves[succ_id], (
+                f"event-driven violated dependency {pred_id} → {succ_id}: "
+                f"wave {event_waves[pred_id]} not < {event_waves[succ_id]}"
+            )
+
+    def test_sibling_parallel_happens_before_preserved(self):
+        tasks = _make_sibling_parallel()
+        event_waves = simulate_event_driven_waves(tasks)
+        for pred_id, succ_id in direct_dependency_edges(tasks):
+            assert event_waves[pred_id] < event_waves[succ_id], (
+                f"event-driven violated dependency {pred_id} → {succ_id}: "
+                f"wave {event_waves[pred_id]} not < {event_waves[succ_id]}"
+            )
+
+    # -- fan-out ordering equivalence -----------------------------------------
+
+    def test_diamond_fan_out_root_before_parallel_in_both_paths(self):
+        tasks = _make_diamond()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        for sibling in (T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS):
+            assert canvas_waves[T.RELOAD_PATIENT_DATA] < canvas_waves[sibling]
+            assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[sibling]
+
+    def test_sibling_parallel_root_before_all_children_in_both_paths(self):
+        tasks = _make_sibling_parallel()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        for child in (T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS, T.RELOAD_HLA_ALLELES):
+            assert canvas_waves[T.RELOAD_PATIENT_DATA] < canvas_waves[child]
+            assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[child]
+
+    # -- fan-in ordering equivalence ------------------------------------------
+
+    def test_diamond_fan_in_parallel_before_convergence_in_both_paths(self):
+        tasks = _make_diamond()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        for sibling in (T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS):
+            assert canvas_waves[sibling] < canvas_waves[T.RELOAD_MATCHED_TREATMENTS]
+            assert event_waves[sibling] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
+
+    # -- sibling co-dispatch equivalence --------------------------------------
+
+    def test_diamond_siblings_dispatched_same_wave_in_both_paths(self):
+        tasks = _make_diamond()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        assert canvas_waves[T.RELOAD_SOMATIC_MUTATIONS] == canvas_waves[T.RELOAD_GERMLINE_MUTATIONS]
+        assert event_waves[T.RELOAD_SOMATIC_MUTATIONS] == event_waves[T.RELOAD_GERMLINE_MUTATIONS]
+
+    def test_sibling_parallel_all_children_same_wave_in_both_paths(self):
+        tasks = _make_sibling_parallel()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        children = [T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS, T.RELOAD_HLA_ALLELES]
+        canvas_child_waves = {canvas_waves[c] for c in children}
+        event_child_waves = {event_waves[c] for c in children}
+        assert len(canvas_child_waves) == 1, "canvas: all siblings must share a wave"
+        assert len(event_child_waves) == 1, "event-driven: all siblings must share a wave"
+
+    # -- full relative ordering equivalence -----------------------------------
+
+    def test_diamond_relative_order_equivalent(self):
+        """For every task pair, canvas and event-driven agree on strict-before / same-wave."""
+        tasks = _make_diamond()
+        graph = TaskGraph(tasks).make_graph()
+        canvas_waves = canvas_wave_map(graph)
+        event_waves = simulate_event_driven_waves(tasks)
+        spec_ids = list(canvas_waves.keys())
+        for i, a in enumerate(spec_ids):
+            for b in spec_ids[i + 1:]:
+                canvas_a_lt_b = canvas_waves[a] < canvas_waves[b]
+                canvas_b_lt_a = canvas_waves[b] < canvas_waves[a]
+                event_a_lt_b = event_waves[a] < event_waves[b]
+                event_b_lt_a = event_waves[b] < event_waves[a]
+                assert canvas_a_lt_b == event_a_lt_b, (
+                    f"ordering disagreement {a} < {b}: canvas={canvas_a_lt_b}, event={event_a_lt_b}"
+                )
+                assert canvas_b_lt_a == event_b_lt_a, (
+                    f"ordering disagreement {b} < {a}: canvas={canvas_b_lt_a}, event={event_b_lt_a}"
+                )
