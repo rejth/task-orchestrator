@@ -126,6 +126,8 @@ class ScopedJobInterface(Protocol[S]):
 
     def dispatchable_tasks(self) -> list[ScheduledScopedTask]: ...
 
+    def stop_run(self, message: str, at: datetime.datetime) -> tuple[ScopedJobInterface[S], list[UUID]]: ...
+
 
 @dataclass
 class ScopedJob(Generic[S]):
@@ -414,6 +416,21 @@ class ScopedJob(Generic[S]):
             ):
                 result.append(task)
         return result
+
+    def stop_run(self, message: str, at: datetime.datetime) -> tuple[ScopedJob[S], list[UUID]]:
+        """Abort all PENDING and IN_PROGRESS tasks; return launch IDs to revoke in Celery."""
+        aborted_tasks: list[ScopedTask] = []
+        launch_ids: list[UUID] = []
+        for task in self.tasks:
+            match task:
+                case ScheduledScopedTask():
+                    aborted_tasks.append(task.fail(message=message, at=at, is_aborted=True))
+                    launch_ids.append(task.current_launch.id)
+                case StartedScopedTask():
+                    aborted_tasks.append(task.fail(message=message, at=at, is_aborted=True))
+                    launch_ids.append(task.current_launch.id)
+        updated_job = self._update_tasks(tasks_to_update=aborted_tasks, new_tasks=[], deleted_tasks=set())
+        return updated_job, launch_ids
 
     def _get_outstanding_tasks(self) -> list[ScopedTask]:
         return [t for t in self.get_tasks() if isinstance(t, ScheduledScopedTask | StartedScopedTask)]
