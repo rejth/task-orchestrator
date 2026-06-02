@@ -52,7 +52,6 @@ def task_runner(
     settings = get_settings()
 
     with SessionLocal() as session:
-        expired = False
         try:
             jobs_repo = SQLJobsRepository(session=session)
             service = TasksManagementService(
@@ -61,7 +60,6 @@ def task_runner(
                 chain_expires_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
                 event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
             )
-
 
             if expires_at:
                 now = datetime.datetime.now(datetime.timezone.utc)
@@ -84,7 +82,6 @@ def task_runner(
                             task_id, launch_id,
                         )
                         return
-                    expired = True
                     session.commit()
                     return
 
@@ -134,7 +131,7 @@ def task_runner(
                         jobs_repo=SQLJobsRepository(session=err_session), broker=celery_app
                     )
                     service.abort_task(
-                        scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=expired
+                        scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=False
                     )
                     err_session.commit()
             except Exception:

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from src.domain.scoped_task import FailedScopedTask
 from src.domain.task import TaskSpecificationId as T
 from tests.unit.domain.conftest import make_scheduled_task, make_spec
-from tests.unit.services.test_stop_run import _make_job, _make_service
+from tests.unit.services.conftest import _make_job, _make_service
 
 # ── RED slice 2: expired Task detected at queue processing time ──────────────
 
