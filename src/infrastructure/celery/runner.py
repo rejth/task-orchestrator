@@ -63,7 +63,7 @@ def task_runner(
 
             if expires_at:
                 now = datetime.datetime.now(datetime.timezone.utc)
-                if datetime.datetime.fromisoformat(expires_at) <= now:
+                if datetime.datetime.fromisoformat(expires_at) < now:
                     logger.info(
                         "Task %s launch %s expired at %s — finalizing without execution",
                         task_id, launch_id, expires_at,
@@ -78,7 +78,8 @@ def task_runner(
                         return
                     except RequiredTaskNotFinished:
                         logger.warning(
-                            "Task %s launch %s expiry skipped — predecessor still in-flight (stop_run race)",
+                            "Task %s launch %s expiry skipped — predecessor not yet finished,"
+                            " task will execute when predecessor completes",
                             task_id, launch_id,
                         )
                         return
