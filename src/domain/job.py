@@ -340,6 +340,8 @@ class ScopedJob(Generic[S]):
         failed_tasks = []
         for task in self._next_tasks(start_tasks=[current_task]):
             match task:
+                case NewScopedTask():
+                    failed_tasks.append(task.fail(message=message, at=at, is_aborted=is_aborted))
                 case ScheduledScopedTask() | StartedScopedTask():
                     failed_tasks.append(task.fail(message=message, at=at, is_aborted=is_aborted))
         return failed_tasks
@@ -423,6 +425,8 @@ class ScopedJob(Generic[S]):
         launch_ids: list[UUID] = []
         for task in self.tasks:
             match task:
+                case NewScopedTask():
+                    aborted_tasks.append(task.fail(message=message, at=at, is_aborted=True))
                 case ScheduledScopedTask():
                     aborted_tasks.append(task.fail(message=message, at=at, is_aborted=True))
                     launch_ids.append(task.current_launch.id)
