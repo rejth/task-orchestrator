@@ -174,6 +174,7 @@ class TasksManagementService:
             at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update(job=updated_job)
+        self._jobs_repo.commit()
         for launch_id in launch_ids:
             try:
                 self._broker.control.revoke(str(launch_id), terminate=True)

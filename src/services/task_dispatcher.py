@@ -27,6 +27,5 @@ class TaskDispatcher:
             args=(scope_id, task.spec_id.value, launch_id, user, expires_at.isoformat()),
             options={"task_id": launch_id},
             immutable=True,
-            expires=expires_at,
             app=self._broker,
         ).apply_async()
