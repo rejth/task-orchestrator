@@ -74,10 +74,10 @@ Several steps are human-in-the-loop (HITL) decisions — canary evaluation, the 
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] Verify all acceptance criteria from Overview are satisfied
-- [ ] Run full project test suite including characterization tests — all must pass
-- [ ] Confirm no remaining references to the old canvas path (search codebase)
-- [ ] Run project linter — all issues must be fixed
+- [x] Verify all acceptance criteria from Overview are satisfied
+- [x] Run full project test suite including characterization tests — all must pass
+- [x] Confirm no remaining references to the old canvas path (search codebase)
+- [x] Run project linter — all issues must be fixed
 
 ## Post-Completion
 
