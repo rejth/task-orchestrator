@@ -3,8 +3,9 @@ from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.orm import Session
 
-from src.api.deps import get_service, get_tasks_repo, verify_api_key
+from src.api.deps import get_db, get_service, get_tasks_repo, verify_api_key
 from src.api.schemas.journal import JournalEntrySchema, JournalResponse
 from src.api.schemas.tasks import ScheduleResponse, TaskListResponse, TaskSchema
 from src.domain.job import TaskNotFound
@@ -111,13 +112,23 @@ def get_tasks(
 def schedule_task(
     scope_id: UUID,
     task_id: str,
+    db: Session = Depends(get_db),
     service: TasksManagementService = Depends(get_service),
     api_key: str = Depends(verify_api_key),
 ) -> ScheduleResponse:
     try:
         spec_id = TaskSpecificationId(task_id)
         result = service.schedule_task(scope_id=str(scope_id), task_id=spec_id, user=api_key)
-        service.send_to_queue(result=result, user=api_key)
+        db.commit()
+        try:
+            service.send_to_queue(result=result, user=api_key)
+        except Exception as dispatch_err:
+            logger.error(
+                "Dispatch failed after commit for scope %s — reconciliation sweep will retry: %s",
+                scope_id,
+                dispatch_err,
+                exc_info=dispatch_err,
+            )
         return ScheduleResponse(tasks=[_task_to_schema(t) for t in result.tasks_sequence])
     except (JobNotFound, TaskNotFound) as err:
         raise HTTPException(status_code=404, detail=str(err))
