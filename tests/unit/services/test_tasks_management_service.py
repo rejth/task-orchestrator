@@ -1,4 +1,5 @@
 """Unit tests for TasksManagementService feature-flag routing."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -41,8 +42,7 @@ def _make_service(
 
 def test_flag_off_routes_to_canvas(jobs_repo, broker, operation_result):
     svc = _make_service(jobs_repo, broker, event_driven=False)
-    with patch.object(svc, "_send_to_canvas") as canvas_mock, \
-         patch.object(svc, "_send_event_driven") as ed_mock:
+    with patch.object(svc, "_send_to_canvas") as canvas_mock, patch.object(svc, "_send_event_driven") as ed_mock:
         svc.send_to_queue(result=operation_result, user="user@example.com")
     canvas_mock.assert_called_once_with(operation_result, "user@example.com")
     ed_mock.assert_not_called()
@@ -50,8 +50,7 @@ def test_flag_off_routes_to_canvas(jobs_repo, broker, operation_result):
 
 def test_flag_on_routes_to_event_driven(jobs_repo, broker, operation_result):
     svc = _make_service(jobs_repo, broker, event_driven=True)
-    with patch.object(svc, "_send_to_canvas") as canvas_mock, \
-         patch.object(svc, "_send_event_driven") as ed_mock:
+    with patch.object(svc, "_send_to_canvas") as canvas_mock, patch.object(svc, "_send_event_driven") as ed_mock:
         svc.send_to_queue(result=operation_result, user="user@example.com")
     ed_mock.assert_called_once_with(operation_result, "user@example.com")
     canvas_mock.assert_not_called()
@@ -59,8 +58,7 @@ def test_flag_on_routes_to_event_driven(jobs_repo, broker, operation_result):
 
 def test_default_flag_is_canvas(jobs_repo, broker, operation_result):
     svc = TasksManagementService(jobs_repo=jobs_repo, broker=broker)
-    with patch.object(svc, "_send_to_canvas") as canvas_mock, \
-         patch.object(svc, "_send_event_driven") as ed_mock:
+    with patch.object(svc, "_send_to_canvas") as canvas_mock, patch.object(svc, "_send_event_driven") as ed_mock:
         svc.send_to_queue(result=operation_result, user="user@example.com")
     canvas_mock.assert_called_once()
     ed_mock.assert_not_called()
@@ -157,7 +155,9 @@ def test_finish_task_event_driven_schedules_and_dispatches_successor(jobs_repo, 
     mock_dispatcher = MagicMock()
     svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
 
-    _, successors = svc.finish_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+    _, successors = svc.finish_task(
+        scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER
+    )
 
     assert len(successors) == 1
     assert successors[0].spec_id == T.RELOAD_SOMATIC_MUTATIONS
@@ -179,7 +179,9 @@ def test_skip_task_event_driven_schedules_and_dispatches_successor(jobs_repo, br
     mock_dispatcher = MagicMock()
     svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
 
-    _, successors = svc.skip_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+    _, successors = svc.skip_task(
+        scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER
+    )
 
     assert len(successors) == 1
     assert successors[0].spec_id == T.RELOAD_SOMATIC_MUTATIONS
@@ -200,7 +202,9 @@ def test_skip_task_canvas_no_successor_dispatch(jobs_repo, broker):
     mock_dispatcher = MagicMock()
     svc = _make_service(jobs_repo, broker, event_driven=False, task_dispatcher=mock_dispatcher)
 
-    _, successors = svc.skip_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+    _, successors = svc.skip_task(
+        scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER
+    )
 
     assert successors == []
     assert jobs_repo.update_task.call_count == 1
@@ -219,7 +223,9 @@ def test_finish_task_canvas_no_successor_dispatch(jobs_repo, broker):
     mock_dispatcher = MagicMock()
     svc = _make_service(jobs_repo, broker, event_driven=False, task_dispatcher=mock_dispatcher)
 
-    _, successors = svc.finish_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+    _, successors = svc.finish_task(
+        scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER
+    )
 
     assert successors == []
     assert jobs_repo.update_task.call_count == 1
@@ -240,7 +246,9 @@ def test_finish_task_event_driven_fan_in_not_ready(jobs_repo, broker):
     mock_dispatcher = MagicMock()
     svc = _make_service(jobs_repo, broker, event_driven=True, task_dispatcher=mock_dispatcher)
 
-    _, successors = svc.finish_task(scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER)
+    _, successors = svc.finish_task(
+        scope_id=SCOPE_ID, task_id=T.RELOAD_PATIENT_DATA, launch_id=started_a.current_launch.id, user=USER
+    )
 
     assert successors == []
     svc.dispatch_successors(successors=successors, scope_id=SCOPE_ID, user=USER)
@@ -255,6 +263,7 @@ def test_dispatch_successors_empty_list_is_noop(jobs_repo, broker):
 
 
 # --- Task 4: failure dispatches nothing; exactly-once fan-in ---
+
 
 def _make_finished_task(spec) -> SuccessfullyFinishedScopedTask:
     return _make_started_task(spec).finish(message="finished", at=AT)

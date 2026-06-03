@@ -24,9 +24,7 @@ class ScopedTaskModel(Base):
     current_launch_id: Mapped[Optional[UUID]] = mapped_column(
         ForeignKey("task_launches.id", use_alter=True), index=True
     )
-    latest_launch_id: Mapped[Optional[UUID]] = mapped_column(
-        ForeignKey("task_launches.id", use_alter=True), index=True
-    )
+    latest_launch_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("task_launches.id", use_alter=True), index=True)
 
     current_launch: Mapped[Optional[TaskLaunchModel]] = relationship(
         TaskLaunchModel, foreign_keys=[current_launch_id], uselist=False
