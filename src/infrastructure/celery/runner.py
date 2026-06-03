@@ -7,8 +7,9 @@ from uuid import UUID
 from celery import Task as CeleryTask
 from celery.exceptions import TaskError
 
-from src.domain.job import InvalidChangeTaskStatusOperation
+from src.domain.job import InvalidChangeTaskStatusOperation, RequiredTaskNotFinished
 from src.domain.journal import Log, LogLevel, UnclassifiedLogRecord
+from src.domain.scoped_task import LaunchNotFound
 from src.domain.task import TaskSpecificationId
 from src.handlers.demo import DemoHandler
 from src.handlers.interface import TaskHandleStatus
@@ -33,7 +34,9 @@ class TaskExecutionError(TaskError):
 
 
 @celery_app.task(name=TASK_NAME, bind=True, max_retries=0)
-def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, user: str) -> None:
+def task_runner(
+    self: CeleryTask, scope_id: str, task_id: str, launch_id: str, user: str, expires_at: str | None = None
+) -> None:
     logger.info("Starting task %s launch %s for scope %s", task_id, launch_id, scope_id)
     task_spec_id = TaskSpecificationId(task_id)
     launch_uuid = UUID(launch_id)
@@ -57,6 +60,32 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
                 chain_expires_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
                 event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
             )
+
+            expired = False
+            if expires_at:
+                now = datetime.datetime.now(datetime.timezone.utc)
+                if datetime.datetime.fromisoformat(expires_at) <= now:
+                    logger.info(
+                        "Task %s launch %s expired at %s — finalizing without execution",
+                        task_id, launch_id, expires_at,
+                    )
+                    try:
+                        service.expire_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
+                    except (InvalidChangeTaskStatusOperation, LaunchNotFound):
+                        logger.warning(
+                            "Task %s launch %s already finalized or superseded, discarding stale expiry",
+                            task_id, launch_id,
+                        )
+                        return
+                    except RequiredTaskNotFinished:
+                        logger.warning(
+                            "Task %s launch %s expiry skipped — predecessor still in-flight (stop_run race)",
+                            task_id, launch_id,
+                        )
+                        return
+                    expired = True
+                    session.commit()
+                    return
 
             try:
                 service.start_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
@@ -103,7 +132,9 @@ def task_runner(self: CeleryTask, scope_id: str, task_id: str, launch_id: str, u
                     service = TasksManagementService(
                         jobs_repo=SQLJobsRepository(session=err_session), broker=celery_app
                     )
-                    service.abort_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=False)
+                    service.abort_task(
+                        scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=expired
+                    )
                     err_session.commit()
             except Exception:
                 logger.error("Failed to mark task as failed after error", exc_info=True)

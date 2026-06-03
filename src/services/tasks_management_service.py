@@ -1,4 +1,5 @@
 import datetime
+import logging
 from typing import Sequence
 from uuid import UUID, uuid4
 
@@ -16,6 +17,8 @@ from src.domain.scoped_task import (
 from src.domain.task import TaskSpecification, TaskSpecificationId
 from src.services.make_celery_chain import CeleryChainBuilder
 from src.services.task_dispatcher import TaskDispatcher
+
+logger = logging.getLogger(__name__)
 
 
 class JobNotFound(ValueError):
@@ -53,7 +56,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id_generator=uuid4,
             message="Task was scheduled",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
             by=user,
         )
         self._jobs_repo.update(job=result.updated_job)
@@ -84,7 +87,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was started",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=started_task)
         return updated_job
@@ -101,7 +104,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was successfully finished",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=finished_task)
         successors = (
@@ -121,7 +124,7 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was aborted",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
             is_aborted=is_aborted,
         )
         self._jobs_repo.update(job=updated_job)
@@ -139,13 +142,46 @@ class TasksManagementService:
             task_id=task_id,
             launch_id=launch_id,
             message="Task was skipped",
-            at=datetime.datetime.now(),
+            at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=skipped_task)
         successors = (
             self._schedule_unblocked_successors(updated_job, user, task_id) if self._event_driven_dispatch else []
         )
         return updated_job, successors
+
+    def expire_task(
+        self,
+        scope_id: str,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+    ) -> ScopedJobInterface:
+        job = self._require_job_for_update(scope_id)
+        updated_job = job.fail(
+            task_id=task_id,
+            launch_id=launch_id,
+            message="Task expired while waiting in queue",
+            at=datetime.datetime.now(datetime.timezone.utc),
+            is_aborted=True,
+        )
+        self._jobs_repo.update(job=updated_job)
+        return updated_job
+
+    def stop_run(self, scope_id: str) -> None:
+        job = self._require_job_for_update(scope_id)
+        updated_job, launch_ids = job.stop_run(
+            message="Run was stopped",
+            at=datetime.datetime.now(datetime.timezone.utc),
+        )
+        self._jobs_repo.update(job=updated_job)
+        self._jobs_repo.commit()
+        for launch_id in launch_ids:
+            try:
+                self._broker.control.revoke(str(launch_id), terminate=True)
+            except Exception:
+                logger.warning(
+                    "Failed to revoke Celery task %s — worker may still execute", launch_id, exc_info=True
+                )
 
     def dispatch_successors(self, successors: list[ScheduledScopedTask], scope_id: str, user: str) -> None:
         if successors:
