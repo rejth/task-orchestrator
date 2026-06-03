@@ -9,6 +9,7 @@ from src.infrastructure.celery.app import get_celery_app
 from src.infrastructure.database.session import get_session_factory
 from src.infrastructure.repositories.jobs_repo import SQLJobsRepository
 from src.infrastructure.repositories.tasks_repo import FsTaskSpecificationsRepo
+from src.services.task_dispatcher import TaskDispatcher
 from src.services.tasks_management_service import TasksManagementService
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
@@ -50,5 +51,5 @@ def get_service(
     return TasksManagementService(
         jobs_repo=jobs_repo,
         broker=broker,
-        chain_expires_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
+        task_dispatcher=TaskDispatcher(broker=broker, expiry_seconds=settings.TASK_EXPIRY_SECONDS),
     )

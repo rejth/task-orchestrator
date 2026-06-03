@@ -28,7 +28,7 @@ def reconciliation_sweep() -> None:
         jobs_repo = SQLJobsRepository(session=session)
         dispatcher = TaskDispatcher(
             broker=celery_app,
-            expiry_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
+            expiry_seconds=settings.TASK_EXPIRY_SECONDS,
         )
         service = ReconciliationSweepService(
             jobs_repo=jobs_repo,

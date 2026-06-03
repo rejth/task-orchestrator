@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://localhost:5432/orchestrator"
     REDIS_URL: str = "redis://localhost:6379/0"
     ENVIRONMENT: str = "development"
-    CELERY_TASK_CHAIN_EXPIRES: int = 3600
+    TASK_EXPIRY_SECONDS: int = 3600
     API_KEY: str = ""
     EVENT_DRIVEN_DISPATCH: bool = True
     CANARY_SCOPES: frozenset[str] = frozenset()

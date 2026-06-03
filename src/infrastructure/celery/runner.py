@@ -14,7 +14,7 @@ from src.domain.task import TaskSpecificationId
 from src.handlers.demo import DemoHandler
 from src.handlers.interface import TaskHandleStatus
 from src.infrastructure.celery.app import get_celery_app
-from src.services.task_dispatcher import TASK_NAME
+from src.services.task_dispatcher import TASK_NAME, TaskDispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def task_runner(
             service = TasksManagementService(
                 jobs_repo=jobs_repo,
                 broker=celery_app,
-                chain_expires_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
+                task_dispatcher=TaskDispatcher(broker=celery_app, expiry_seconds=settings.TASK_EXPIRY_SECONDS),
             )
 
             if expires_at:

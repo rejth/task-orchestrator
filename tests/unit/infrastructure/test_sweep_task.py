@@ -17,7 +17,7 @@ def sweep_mocks():
     MockService = MagicMock(return_value=mock_service)
     mock_settings = MagicMock()
     mock_settings.EVENT_DRIVEN_DISPATCH = True
-    mock_settings.CELERY_TASK_CHAIN_EXPIRES = 3600
+    mock_settings.TASK_EXPIRY_SECONDS = 3600
 
     with (
         patch("src.infrastructure.celery.sweep_task.get_settings", return_value=mock_settings),
