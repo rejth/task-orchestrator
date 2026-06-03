@@ -1,4 +1,5 @@
 """Shared fixtures and helpers for domain unit tests."""
+
 import datetime
 from uuid import UUID
 
@@ -21,11 +22,13 @@ def make_spec(
 
 def make_new_task(spec: TaskSpecification) -> NewScopedTask:
     from uuid import uuid4
+
     return NewScopedTask(id=uuid4(), job_id=JOB_ID, specification=spec)
 
 
 def make_scheduled_task(spec: TaskSpecification, launch_id: UUID | None = None) -> ScheduledScopedTask:
     from uuid import uuid4
+
     task_id = uuid4()
     lid = launch_id or uuid4()
     return ScheduledScopedTask(

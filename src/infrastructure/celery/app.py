@@ -7,6 +7,7 @@ def get_celery_app(broker_url: str | None = None) -> Celery:
     global _app
     if _app is None:
         from src.api.config import get_settings
+
         settings = get_settings()
         url = broker_url or settings.REDIS_URL
         _app = Celery("task_orchestrator", broker=url, backend=url)

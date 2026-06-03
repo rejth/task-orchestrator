@@ -5,13 +5,14 @@ from uuid import UUID, uuid4
 
 from celery import Celery
 
-from src.domain.job import OperationResult, ScopedJobInterface
+from src.domain.job import InvalidChangeTaskStatusOperation, OperationResult, ScopedJobInterface
 from src.domain.jobs_repo import JobsRepository
 from src.domain.journal import FileLogRecord, LaunchLogRecord, Log
 from src.domain.scoped_task import (
     ScheduledScopedTask,
     ScopedTask,
     SkippedScopedTask,
+    StartedScopedTask,
     SuccessfullyFinishedScopedTask,
 )
 from src.domain.task import TaskSpecification, TaskSpecificationId
@@ -157,6 +158,12 @@ class TasksManagementService:
         launch_id: UUID,
     ) -> ScopedJobInterface:
         job = self._require_job_for_update(scope_id)
+        for task in job.get_tasks():
+            if task.spec_id is task_id and isinstance(task, StartedScopedTask):
+                if task.current_launch.id == launch_id:
+                    # Task already started by another worker — stale expiry, discard it.
+                    raise InvalidChangeTaskStatusOperation(task=task, operation="expire")
+                break
         updated_job = job.fail(
             task_id=task_id,
             launch_id=launch_id,
@@ -179,9 +186,7 @@ class TasksManagementService:
             try:
                 self._broker.control.revoke(str(launch_id), terminate=True)
             except Exception:
-                logger.warning(
-                    "Failed to revoke Celery task %s — worker may still execute", launch_id, exc_info=True
-                )
+                logger.warning("Failed to revoke Celery task %s — worker may still execute", launch_id, exc_info=True)
 
     def dispatch_successors(self, successors: list[ScheduledScopedTask], scope_id: str, user: str) -> None:
         if successors:

@@ -1,4 +1,5 @@
 """Integration tests for the tasks HTTP API."""
+
 import uuid
 
 from fastapi.testclient import TestClient
@@ -83,7 +84,5 @@ def test_abort_unknown_launch_returns_404(client: TestClient):
 def test_get_journal_for_nonexistent_launch_returns_404(client: TestClient):
     scope_id = _scope_id()
     client.post(f"/scopes/{scope_id}")
-    resp = client.get(
-        f"/scopes/{scope_id}/tasks/RELOAD_PATIENT_DATA/launches/{uuid.uuid4()}/journal"
-    )
+    resp = client.get(f"/scopes/{scope_id}/tasks/RELOAD_PATIENT_DATA/launches/{uuid.uuid4()}/journal")
     assert resp.status_code == 404
