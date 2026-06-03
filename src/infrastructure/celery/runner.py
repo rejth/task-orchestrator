@@ -59,6 +59,7 @@ def task_runner(
                 broker=celery_app,
                 chain_expires_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
                 event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
+                canary_scopes=settings.CANARY_SCOPES,
             )
 
             if expires_at:
