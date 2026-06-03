@@ -51,13 +51,14 @@ def test_per_task_expiry_unaffected_after_removal():
     task.spec_id.value = "RELOAD_PATIENT_DATA"
     task.current_launch.id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
+    now = datetime.datetime.now(datetime.timezone.utc)
     with patch("src.services.task_dispatcher.Signature") as MockSig:
         MockSig.return_value = MagicMock()
         dispatcher.dispatch(tasks=[task], scope_id="scope-1", user="user@example.com")
 
+    MockSig.return_value.apply_async.assert_called_once()
     kwargs = MockSig.call_args[1]
     expires_at_str = kwargs["args"][4]
     expires_at = datetime.datetime.fromisoformat(expires_at_str)
-    now = datetime.datetime.now(datetime.timezone.utc)
     assert expires_at > now
     assert expires_at < now + datetime.timedelta(seconds=700)

@@ -132,7 +132,9 @@ def task_runner(
             try:
                 with SessionLocal() as err_session:
                     service = TasksManagementService(
-                        jobs_repo=SQLJobsRepository(session=err_session), broker=celery_app
+                        jobs_repo=SQLJobsRepository(session=err_session),
+                        broker=celery_app,
+                        task_dispatcher=TaskDispatcher(broker=celery_app, expiry_seconds=settings.TASK_EXPIRY_SECONDS),
                     )
                     service.abort_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=False)
                     err_session.commit()

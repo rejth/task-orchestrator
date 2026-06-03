@@ -74,12 +74,12 @@ FETCH_RAW_DATA
 src/
 ├── api/            # FastAPI app, Depends providers, Pydantic schemas, router
 ├── domain/         # State machines: ScopedJob, ScopedTask, TaskLaunch, journal
-├── services/       # Business logic, DAG builder, Celery chain builder
+├── services/       # Business logic, task dispatcher, event-driven dispatch
 ├── infrastructure/ # SQLAlchemy models, SQLJobsRepository, Celery runner
 ├── handlers/       # TaskHandlerInterface + DemoHandler
 └── workers/        # Celery consumer entry point
 tests/
-├── unit/domain/    # 49 pure domain tests (no DB, no HTTP)
+├── unit/domain/    # Pure domain tests (no DB, no HTTP)
 └── integration/    # 9 API tests against SQLite in-memory
 alembic/versions/   # Single initial migration (5 tables)
 ```

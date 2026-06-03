@@ -149,6 +149,9 @@ def _topological_sort(tasks: list[ScheduledScopedTask]) -> list[ScheduledScopedT
                 in_degree[t.spec_id] -= 1
                 if in_degree[t.spec_id] == 0:
                     queue.put(t.spec_id)
+    if len(sorted_tasks) != len(tasks):
+        cycle_ids = [t.spec_id.value for t in tasks if task_by_id[t.spec_id] not in sorted_tasks]
+        raise ValueError(f"Dependency cycle detected among tasks: {cycle_ids}")
     return sorted_tasks
 
 
