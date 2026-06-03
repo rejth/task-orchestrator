@@ -10,7 +10,6 @@ class Settings(BaseSettings):
     TASK_EXPIRY_SECONDS: int = 3600
     API_KEY: str = ""
     EVENT_DRIVEN_DISPATCH: bool = True
-    CANARY_SCOPES: frozenset[str] = frozenset()
     RECONCILIATION_SWEEP_INTERVAL_SECONDS: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

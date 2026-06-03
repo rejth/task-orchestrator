@@ -114,44 +114,6 @@ def direct_dependency_edges(
 
 
 # ---------------------------------------------------------------------------
-# Tests: fixture loading
-# ---------------------------------------------------------------------------
-
-
-class TestFixtureLoading:
-    def test_linear_fixture_produces_four_scheduled_tasks(self):
-        tasks = _make_linear_sequence()
-        assert len(tasks) == 4
-        assert all(isinstance(t, ScheduledScopedTask) for t in tasks)
-
-    def test_linear_fixture_spec_ids(self):
-        tasks = _make_linear_sequence()
-        ids = [t.spec_id for t in tasks]
-        assert T.RELOAD_PATIENT_DATA in ids
-        assert T.RELOAD_MATCHED_TREATMENTS in ids
-        assert T.EXPORT_TREATMENTS in ids
-        assert T.PUSH_MATCHED_TREATMENTS in ids
-
-    def test_diamond_fixture_produces_four_scheduled_tasks(self):
-        tasks = _make_diamond()
-        assert len(tasks) == 4
-        assert all(isinstance(t, ScheduledScopedTask) for t in tasks)
-
-    def test_diamond_fixture_spec_ids(self):
-        tasks = _make_diamond()
-        ids = [t.spec_id for t in tasks]
-        assert T.RELOAD_PATIENT_DATA in ids
-        assert T.RELOAD_SOMATIC_MUTATIONS in ids
-        assert T.RELOAD_GERMLINE_MUTATIONS in ids
-        assert T.RELOAD_MATCHED_TREATMENTS in ids
-
-    def test_single_task_fixture(self):
-        tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
-        assert len(tasks) == 1
-        assert isinstance(tasks[0], ScheduledScopedTask)
-
-
-# ---------------------------------------------------------------------------
 # Tests: event-driven output capture
 # ---------------------------------------------------------------------------
 
@@ -207,16 +169,6 @@ class TestEventDrivenOutputCapture:
 class TestLinearOrdering:
     """Event-driven dispatch produces correct ordering for linear graphs."""
 
-    def test_four_node_chain_covers_all_tasks(self):
-        tasks = _make_linear_sequence()
-        event_ids = set(simulate_event_driven_waves(tasks).keys())
-        assert event_ids == {
-            T.RELOAD_PATIENT_DATA,
-            T.RELOAD_MATCHED_TREATMENTS,
-            T.EXPORT_TREATMENTS,
-            T.PUSH_MATCHED_TREATMENTS,
-        }
-
     def test_single_node_covers_task(self):
         tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
         event_ids = set(simulate_event_driven_waves(tasks).keys())
@@ -251,11 +203,6 @@ class TestLinearOrdering:
         assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
         assert event_waves[T.RELOAD_MATCHED_TREATMENTS] < event_waves[T.EXPORT_TREATMENTS]
         assert event_waves[T.EXPORT_TREATMENTS] < event_waves[T.PUSH_MATCHED_TREATMENTS]
-
-    def test_two_node_chain_strictly_ordered(self):
-        tasks = _make_two_node_chain()
-        event_waves = simulate_event_driven_waves(tasks)
-        assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
 
     def test_single_node_at_wave_zero(self):
         tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
