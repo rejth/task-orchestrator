@@ -5,6 +5,7 @@ Diamond DAG:
         ├──▶ RELOAD_SOMATIC_MUTATIONS  ─┐
         └──▶ RELOAD_GERMLINE_MUTATIONS ──▶ RELOAD_MATCHED_TREATMENTS
 """
+
 from src.domain.task import TaskSpecificationId
 from src.services.make_task_graph import LeafTask, ParallelTasks, TaskGraph
 from tests.unit.domain.conftest import make_scheduled_task, make_spec

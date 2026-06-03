@@ -61,29 +61,32 @@ def task_runner(
                 event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
             )
 
-            expired = False
             if expires_at:
                 now = datetime.datetime.now(datetime.timezone.utc)
-                if datetime.datetime.fromisoformat(expires_at) <= now:
+                if datetime.datetime.fromisoformat(expires_at) < now:
                     logger.info(
                         "Task %s launch %s expired at %s — finalizing without execution",
-                        task_id, launch_id, expires_at,
+                        task_id,
+                        launch_id,
+                        expires_at,
                     )
                     try:
                         service.expire_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid)
                     except (InvalidChangeTaskStatusOperation, LaunchNotFound):
                         logger.warning(
                             "Task %s launch %s already finalized or superseded, discarding stale expiry",
-                            task_id, launch_id,
+                            task_id,
+                            launch_id,
                         )
                         return
                     except RequiredTaskNotFinished:
                         logger.warning(
-                            "Task %s launch %s expiry skipped — predecessor still in-flight (stop_run race)",
-                            task_id, launch_id,
+                            "Task %s launch %s expiry skipped — predecessor not yet finished,"
+                            " task will execute when predecessor completes",
+                            task_id,
+                            launch_id,
                         )
                         return
-                    expired = True
                     session.commit()
                     return
 
@@ -132,9 +135,7 @@ def task_runner(
                     service = TasksManagementService(
                         jobs_repo=SQLJobsRepository(session=err_session), broker=celery_app
                     )
-                    service.abort_task(
-                        scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=expired
-                    )
+                    service.abort_task(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, is_aborted=False)
                     err_session.commit()
             except Exception:
                 logger.error("Failed to mark task as failed after error", exc_info=True)

@@ -3,40 +3,23 @@
 Integration-style: exercises real ScopedJob domain object + real service;
 only the repo and Celery broker are mocked.
 """
-from dataclasses import dataclass
-from unittest.mock import MagicMock
-from uuid import uuid4
 
-from src.domain.job import ScopedJob
+from unittest.mock import MagicMock
+
 from src.domain.scoped_task import FailedScopedTask, StartedScopedTask, SuccessfullyFinishedScopedTask
 from src.domain.task import TaskSpecification
 from src.domain.task import TaskSpecificationId as T
 from src.services.reconciliation_sweep_service import ReconciliationSweepService
-from src.services.tasks_management_service import TasksManagementService
 from tests.unit.domain.conftest import AT, make_new_task, make_scheduled_task, make_spec
-
-
-@dataclass(frozen=True)
-class FakeScope:
-    _id: str
-
-    def get_id(self) -> str:
-        return self._id
-
-
-def _make_job(scope_id: str, tasks: list) -> ScopedJob:
-    return ScopedJob(id=uuid4(), scope=FakeScope(scope_id), tasks=tasks)
+from tests.unit.services.conftest import _make_job, _make_service
 
 
 def _make_started_task(spec: TaskSpecification) -> StartedScopedTask:
     return make_scheduled_task(spec).start(message="started", at=AT)
 
 
-def _make_service(repo, broker=None, **kwargs) -> TasksManagementService:
-    return TasksManagementService(jobs_repo=repo, broker=broker or MagicMock(), **kwargs)
-
-
 # ── RED slice 1: stop Job, all non-terminal Tasks transition to aborted ──────
+
 
 def test_stop_run_aborts_pending_task():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
@@ -72,11 +55,14 @@ def test_stop_run_aborts_all_non_terminal_tasks():
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_SOMATIC_MUTATIONS])
-    job = _make_job("scope-1", [
-        _make_started_task(spec_a),
-        make_scheduled_task(spec_b),
-        make_scheduled_task(spec_c),
-    ])
+    job = _make_job(
+        "scope-1",
+        [
+            _make_started_task(spec_a),
+            make_scheduled_task(spec_b),
+            make_scheduled_task(spec_c),
+        ],
+    )
 
     repo = MagicMock()
     repo.find_by_scope_id_for_update.return_value = job
@@ -122,6 +108,7 @@ def test_stop_run_leaves_terminal_tasks_unchanged():
 
 # ── RED slice 2: dispatch path does not enqueue aborted Tasks ────────────────
 
+
 def test_after_stop_run_updated_job_has_no_dispatchable_tasks():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
@@ -157,6 +144,7 @@ def test_after_stop_run_send_to_queue_enqueues_nothing():
 
 # ── RED slice 3: reconciliation sweep skips aborted Tasks ───────────────────
 
+
 def test_after_stop_run_reconciliation_sweep_dispatches_nothing():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
@@ -170,14 +158,13 @@ def test_after_stop_run_reconciliation_sweep_dispatches_nothing():
     sweep_repo = MagicMock()
     sweep_repo.list_all.return_value = [updated_job]
     dispatcher = MagicMock()
-    ReconciliationSweepService(
-        jobs_repo=sweep_repo, dispatcher=dispatcher, system_user="system@sweep"
-    ).sweep()
+    ReconciliationSweepService(jobs_repo=sweep_repo, dispatcher=dispatcher, system_user="system@sweep").sweep()
 
     dispatcher.dispatch.assert_not_called()
 
 
 # ── RED slice 4: running Launches are revoked when stop-run is called ────────
+
 
 def test_stop_run_revokes_in_progress_launch():
     spec = make_spec(T.RELOAD_PATIENT_DATA)
