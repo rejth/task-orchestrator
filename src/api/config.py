@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     CELERY_TASK_CHAIN_EXPIRES: int = 3600
     API_KEY: str = ""
-    EVENT_DRIVEN_DISPATCH: bool = False
+    EVENT_DRIVEN_DISPATCH: bool = True
     CANARY_SCOPES: frozenset[str] = frozenset()
     RECONCILIATION_SWEEP_INTERVAL_SECONDS: int = 60
 

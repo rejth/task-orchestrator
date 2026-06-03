@@ -50,11 +50,11 @@ Several steps are human-in-the-loop (HITL) decisions — canary evaluation, the 
 
 ### Task 3: Flip feature flag default to event-driven path
 
-- [ ] Update feature flag default to the event-driven path
-- [ ] Verify all scopes now route through the new path
-- [ ] Confirm no regression in previously non-canaried scopes
-- [ ] Write tests for the updated flag default behavior
-- [ ] Run project tests — must pass before next task
+- [x] Update feature flag default to the event-driven path
+- [x] Verify all scopes now route through the new path
+- [x] Confirm no regression in previously non-canaried scopes
+- [x] Write tests for the updated flag default behavior
+- [x] Run project tests — must pass before next task
 
 ### Task 4: Delete old coercion layer modules
 

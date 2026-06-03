@@ -180,3 +180,65 @@ def test_multiple_scopes_in_canary_set(jobs_repo, broker):
             svc.send_to_queue(result=result, user=USER)
         ed.assert_called_once()
         canvas.assert_not_called()
+
+
+# --- Task 3: flag default flipped to True — all scopes route event-driven ---
+
+def test_event_driven_flag_default_is_true():
+    from src.api.config import Settings
+    settings = Settings(_env_file=None)
+    assert settings.EVENT_DRIVEN_DISPATCH is True
+
+
+def test_flag_on_non_canary_routes_to_event_driven(jobs_repo, broker):
+    svc = _make_service(jobs_repo, broker, event_driven=True, canary_scopes=frozenset())
+    result = _make_result(REGULAR_SCOPE)
+    with patch.object(svc, "_send_to_canvas") as canvas, patch.object(svc, "_send_event_driven") as ed:
+        svc.send_to_queue(result=result, user=USER)
+    ed.assert_called_once_with(result, USER)
+    canvas.assert_not_called()
+
+
+def test_flag_on_finish_task_non_canary_schedules_successors(jobs_repo, broker):
+    spec_a = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(TaskSpecificationId.RELOAD_SOMATIC_MUTATIONS, depends_on=[TaskSpecificationId.RELOAD_PATIENT_DATA])
+    started_a = _make_started_task(spec_a)
+    scheduled_b = make_scheduled_task(spec_b)
+    job = _make_job_with_tasks(REGULAR_SCOPE, [started_a, scheduled_b])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=True, canary_scopes=frozenset(), task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.finish_task(
+        scope_id=REGULAR_SCOPE,
+        task_id=TaskSpecificationId.RELOAD_PATIENT_DATA,
+        launch_id=started_a.current_launch.id,
+        user=USER,
+    )
+
+    assert len(successors) == 1
+    assert isinstance(successors[0], ScheduledScopedTask)
+    assert successors[0].spec_id == TaskSpecificationId.RELOAD_SOMATIC_MUTATIONS
+
+
+def test_flag_on_skip_task_non_canary_schedules_successors(jobs_repo, broker):
+    spec_a = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
+    spec_b = make_spec(TaskSpecificationId.RELOAD_SOMATIC_MUTATIONS, depends_on=[TaskSpecificationId.RELOAD_PATIENT_DATA])
+    started_a = _make_started_task(spec_a)
+    scheduled_b = make_scheduled_task(spec_b)
+    job = _make_job_with_tasks(REGULAR_SCOPE, [started_a, scheduled_b])
+    jobs_repo.find_by_scope_id_for_update.return_value = job
+
+    mock_dispatcher = MagicMock()
+    svc = _make_service(jobs_repo, broker, event_driven=True, canary_scopes=frozenset(), task_dispatcher=mock_dispatcher)
+
+    _, successors = svc.skip_task(
+        scope_id=REGULAR_SCOPE,
+        task_id=TaskSpecificationId.RELOAD_PATIENT_DATA,
+        launch_id=started_a.current_launch.id,
+        user=USER,
+    )
+
+    assert len(successors) == 1
+    assert isinstance(successors[0], ScheduledScopedTask)
