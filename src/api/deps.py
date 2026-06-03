@@ -51,6 +51,4 @@ def get_service(
         jobs_repo=jobs_repo,
         broker=broker,
         chain_expires_seconds=settings.CELERY_TASK_CHAIN_EXPIRES,
-        event_driven_dispatch=settings.EVENT_DRIVEN_DISPATCH,
-        canary_scopes=settings.CANARY_SCOPES,
     )
