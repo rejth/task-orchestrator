@@ -298,6 +298,9 @@ class SQLJobsRepository:
     def find_by_scope_id_for_update(self, scope_id: str) -> Optional[ScopedJobInterface]:
         return self._load(scope_id, for_update=True)
 
+    def commit(self) -> None:
+        self._session.commit()
+
     def delete(self, job_id: UUID) -> None:
         model = self._session.get(JobModel, job_id)
         if model:

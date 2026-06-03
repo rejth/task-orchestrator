@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from src.domain.journal import FileLogRecord, LaunchLogRecord, Log
 from src.domain.launch import (
     FailedLaunch,
+    FailMetadata,
     FinishedLaunch,
     ScheduledLaunch,
     ScheduleMetadata,
@@ -113,6 +114,27 @@ class NewScopedTask(BaseScopedTask):
                 message=message,
                 journal=[],
                 metadata=ScheduleMetadata(scheduled_at=at, scheduled_by=by),
+            ),
+        )
+
+    def fail(self, message: str, at: datetime.datetime, is_aborted: bool) -> FailedScopedTask:
+        return FailedScopedTask(
+            id=self.id,
+            job_id=self.job_id,
+            specification=self.specification,
+            launch_history=[],
+            latest_launch=FailedLaunch(
+                task_id=self.id,
+                id=uuid4(),
+                message=message,
+                journal=[],
+                metadata=FailMetadata(
+                    scheduled_at=at,
+                    scheduled_by="",
+                    started_at=at,
+                    failed_at=at,
+                    is_aborted=is_aborted,
+                ),
             ),
         )
 

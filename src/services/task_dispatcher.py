@@ -21,11 +21,11 @@ class TaskDispatcher:
 
     def _enqueue(self, task: ScheduledScopedTask, scope_id: str, user: str, now: datetime.datetime) -> None:
         launch_id = str(task.current_launch.id)
+        expires_at = now + datetime.timedelta(seconds=self._expiry_seconds)
         Signature(
             TASK_NAME,
-            args=(scope_id, task.spec_id.value, launch_id, user),
+            args=(scope_id, task.spec_id.value, launch_id, user, expires_at.isoformat()),
             options={"task_id": launch_id},
             immutable=True,
-            expires=now + datetime.timedelta(seconds=self._expiry_seconds),
             app=self._broker,
         ).apply_async()
