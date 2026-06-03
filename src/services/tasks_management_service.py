@@ -34,13 +34,11 @@ class TasksManagementService:
         self,
         jobs_repo: JobsRepository,
         broker: Celery,
-        chain_expires_seconds: int = 3600,
         task_dispatcher: TaskDispatcher | None = None,
     ):
         self._jobs_repo = jobs_repo
         self._broker = broker
-        self._chain_expires_seconds = chain_expires_seconds
-        self._dispatcher = task_dispatcher or TaskDispatcher(broker=broker, expiry_seconds=chain_expires_seconds)
+        self._dispatcher = task_dispatcher or TaskDispatcher(broker=broker, expiry_seconds=3600)
 
     def create_job(self, scope_id: str, task_specs: list[TaskSpecification]) -> None:
         self._jobs_repo.create_job(scope_id=scope_id, task_specs=task_specs)

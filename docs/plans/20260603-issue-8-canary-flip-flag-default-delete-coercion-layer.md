@@ -66,11 +66,11 @@ Several steps are human-in-the-loop (HITL) decisions — canary evaluation, the 
 
 ### Task 5: Remove chain-level expiry wiring
 
-- [ ] Identify all chain-level expiry wiring tied to the old canvas path
-- [ ] Remove the chain-level expiry logic
-- [ ] Confirm per-task expiry (from #6) is unaffected by the removal
-- [ ] Write tests to confirm expiry behavior is correct after removal
-- [ ] Run project tests — must pass before next task
+- [x] Identify all chain-level expiry wiring tied to the old canvas path
+- [x] Remove the chain-level expiry logic
+- [x] Confirm per-task expiry (from #6) is unaffected by the removal
+- [x] Write tests to confirm expiry behavior is correct after removal
+- [x] Run project tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
 
