@@ -16,7 +16,6 @@ from src.domain.scoped_task import (
     SuccessfullyFinishedScopedTask,
 )
 from src.domain.task import TaskSpecification, TaskSpecificationId
-from src.services.make_celery_chain import CeleryChainBuilder
 from src.services.task_dispatcher import TaskDispatcher
 
 logger = logging.getLogger(__name__)
@@ -36,19 +35,12 @@ class TasksManagementService:
         jobs_repo: JobsRepository,
         broker: Celery,
         chain_expires_seconds: int = 3600,
-        event_driven_dispatch: bool = False,
-        canary_scopes: frozenset[str] = frozenset(),
         task_dispatcher: TaskDispatcher | None = None,
     ):
         self._jobs_repo = jobs_repo
         self._broker = broker
         self._chain_expires_seconds = chain_expires_seconds
-        self._event_driven_dispatch = event_driven_dispatch
-        self._canary_scopes = canary_scopes
         self._dispatcher = task_dispatcher or TaskDispatcher(broker=broker, expiry_seconds=chain_expires_seconds)
-
-    def _use_event_driven(self, scope_id: str) -> bool:
-        return self._event_driven_dispatch or scope_id in self._canary_scopes
 
     def create_job(self, scope_id: str, task_specs: list[TaskSpecification]) -> None:
         self._jobs_repo.create_job(scope_id=scope_id, task_specs=task_specs)
@@ -69,19 +61,7 @@ class TasksManagementService:
         return result
 
     def send_to_queue(self, result: OperationResult, user: str) -> None:
-        scope_id = result.updated_job.get_scope().get_id()
-        if self._use_event_driven(scope_id):
-            self._send_event_driven(result, user)
-        else:
-            self._send_to_canvas(result, user)
-
-    def _send_to_canvas(self, result: OperationResult, user: str) -> None:
-        from typing import cast
-
-        from src.services.make_task_graph import SequentialTasks
-
-        builder = CeleryChainBuilder(result.updated_job, user, self._chain_expires_seconds, self._broker)
-        builder.make_celery_chain(cast(SequentialTasks, result.task_graph)).apply_async()
+        self._send_event_driven(result, user)
 
     def _send_event_driven(self, result: OperationResult, user: str) -> None:
         tasks = result.updated_job.dispatchable_tasks()
@@ -114,11 +94,7 @@ class TasksManagementService:
             at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=finished_task)
-        successors = (
-            self._schedule_unblocked_successors(updated_job, user, task_id)
-            if self._use_event_driven(scope_id)
-            else []
-        )
+        successors = self._schedule_unblocked_successors(updated_job, user, task_id)
         return updated_job, successors
 
     def abort_task(
@@ -154,11 +130,7 @@ class TasksManagementService:
             at=datetime.datetime.now(datetime.timezone.utc),
         )
         self._jobs_repo.update_task(task=skipped_task)
-        successors = (
-            self._schedule_unblocked_successors(updated_job, user, task_id)
-            if self._use_event_driven(scope_id)
-            else []
-        )
+        successors = self._schedule_unblocked_successors(updated_job, user, task_id)
         return updated_job, successors
 
     def expire_task(

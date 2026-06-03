@@ -58,11 +58,11 @@ Several steps are human-in-the-loop (HITL) decisions — canary evaluation, the 
 
 ### Task 4: Delete old coercion layer modules
 
-- [ ] Remove `make_task_graph` module
-- [ ] Remove `make_celery_chain` module
-- [ ] Remove all graph-reconstruction and chain-building logic that supported the old canvas path
-- [ ] Remove all imports and references to the deleted modules
-- [ ] Run project tests — must pass before next task
+- [x] Remove `make_task_graph` module
+- [x] Remove `make_celery_chain` module
+- [x] Remove all graph-reconstruction and chain-building logic that supported the old canvas path
+- [x] Remove all imports and references to the deleted modules
+- [x] Run project tests — must pass before next task
 
 ### Task 5: Remove chain-level expiry wiring
 

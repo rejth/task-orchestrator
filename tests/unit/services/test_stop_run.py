@@ -130,7 +130,7 @@ def test_after_stop_run_send_to_queue_enqueues_nothing():
     repo = MagicMock()
     repo.find_by_scope_id_for_update.return_value = job
     dispatcher = MagicMock()
-    svc = _make_service(repo, event_driven_dispatch=True, task_dispatcher=dispatcher)
+    svc = _make_service(repo, task_dispatcher=dispatcher)
     svc.stop_run("scope-1")
 
     updated_job = repo.update.call_args.kwargs["job"]

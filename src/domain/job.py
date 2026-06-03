@@ -39,7 +39,6 @@ class TaskLocation(Enum):
 class OperationResult(Generic[S]):
     updated_job: ScopedJobInterface[S]
     tasks_sequence: list[ScheduledScopedTask]
-    task_graph: object  # SequentialTasks — avoid circular import; resolved at use site
 
 
 class InvalidChangeTaskStatusOperation(ValueError):
@@ -129,6 +128,30 @@ class ScopedJobInterface(Protocol[S]):
     def stop_run(self, message: str, at: datetime.datetime) -> tuple[ScopedJobInterface[S], list[UUID]]: ...
 
 
+def _topological_sort(tasks: list[ScheduledScopedTask]) -> list[ScheduledScopedTask]:
+    task_by_id = {t.spec_id: t for t in tasks}
+    task_ids = set(task_by_id.keys())
+    in_degree: dict[TaskSpecificationId, int] = {t.spec_id: 0 for t in tasks}
+    for t in tasks:
+        for dep_id in t.specification.depends_on:
+            if dep_id in task_ids:
+                in_degree[t.spec_id] += 1
+    queue: Queue[TaskSpecificationId] = Queue()
+    for spec_id, degree in in_degree.items():
+        if degree == 0:
+            queue.put(spec_id)
+    sorted_tasks: list[ScheduledScopedTask] = []
+    while not queue.empty():
+        spec_id = queue.get()
+        sorted_tasks.append(task_by_id[spec_id])
+        for t in tasks:
+            if spec_id in t.specification.depends_on and t.spec_id in task_ids:
+                in_degree[t.spec_id] -= 1
+                if in_degree[t.spec_id] == 0:
+                    queue.put(t.spec_id)
+    return sorted_tasks
+
+
 @dataclass
 class ScopedJob(Generic[S]):
     id: UUID
@@ -167,8 +190,6 @@ class ScopedJob(Generic[S]):
         at: datetime.datetime,
         by: str,
     ) -> OperationResult[S]:
-        from src.services.make_task_graph import TaskGraph  # avoid circular at module load
-
         current_task = self._get_task_by_id(task_id=task_id)
         previous_tasks = self._previous_tasks(task=current_task)
         root_tasks = (
@@ -198,13 +219,10 @@ class ScopedJob(Generic[S]):
                     )
                 )
 
-        graph = TaskGraph(scheduled_sequence)
-        task_graph_obj = graph.make_graph()
-
+        sorted_sequence = _topological_sort(scheduled_sequence)
         return OperationResult[S](
-            updated_job=self._update_tasks(tasks_to_update=graph.sorted_tasks, new_tasks=[], deleted_tasks=set()),
-            tasks_sequence=graph.sorted_tasks,
-            task_graph=task_graph_obj,
+            updated_job=self._update_tasks(tasks_to_update=sorted_sequence, new_tasks=[], deleted_tasks=set()),
+            tasks_sequence=sorted_sequence,
         )
 
     def start(
