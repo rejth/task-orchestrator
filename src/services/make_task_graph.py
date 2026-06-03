@@ -62,6 +62,7 @@ class TaskGraph:
 
             tasks_groups = self._find_all_parallel_groups(without_root, _filter_with_root)
         else:
+
             def _filter_without_root(_parent_count: int, child_count: int) -> bool:
                 return child_count >= 1
 
@@ -111,9 +112,7 @@ class TaskGraph:
         return sorted_tasks
 
     def _build_task_sequence(
-        self,
-        graph: TaskGraphDependencies,
-        tasks_to_exclude: list[ScheduledScopedTask]
+        self, graph: TaskGraphDependencies, tasks_to_exclude: list[ScheduledScopedTask]
     ) -> SequentialTasks:
         tasks = []
 

@@ -309,7 +309,9 @@ class ScopedJob(Generic[S]):
 
     def _fail_current_task(
         self,
-        task_id: TaskSpecificationId, launch_id: UUID, message: str,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        message: str,
         is_aborted: bool,
         at: datetime.datetime,
     ) -> FailedScopedTask:
@@ -320,8 +322,7 @@ class ScopedJob(Generic[S]):
                     raise RequiredTaskNotFinished(target_task=current_task, not_finished_task=task)
         match current_task:
             case (
-                ScheduledScopedTask(current_launch=current_launch)
-                | StartedScopedTask(current_launch=current_launch)
+                ScheduledScopedTask(current_launch=current_launch) | StartedScopedTask(current_launch=current_launch)
             ) if current_launch.id == launch_id:
                 return current_task.fail(message=message, at=at, is_aborted=is_aborted)
             case FailedScopedTask() | SuccessfullyFinishedScopedTask() | SkippedScopedTask():
@@ -401,9 +402,7 @@ class ScopedJob(Generic[S]):
         return replace(self, tasks=updated + list(new_tasks))
 
     def _update_task(self, updated_task: ScopedTask) -> ScopedJob[S]:
-        return replace(
-            self, tasks=[updated_task if updated_task.match(task_id=t.spec_id) else t for t in self.tasks]
-        )
+        return replace(self, tasks=[updated_task if updated_task.match(task_id=t.spec_id) else t for t in self.tasks])
 
     def dispatchable_tasks(self) -> list[ScheduledScopedTask]:
         """PENDING tasks whose every predecessor is SUCCESS or SKIPPED — runnable now."""
