@@ -7,9 +7,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://localhost:5432/orchestrator"
     REDIS_URL: str = "redis://localhost:6379/0"
     ENVIRONMENT: str = "development"
-    CELERY_TASK_CHAIN_EXPIRES: int = 3600
+    TASK_EXPIRY_SECONDS: int = 3600
     API_KEY: str = ""
-    EVENT_DRIVEN_DISPATCH: bool = False
     RECONCILIATION_SWEEP_INTERVAL_SECONDS: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

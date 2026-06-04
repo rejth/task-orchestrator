@@ -28,8 +28,7 @@ def _runner_patches(mock_service: MagicMock) -> tuple[Any, ...]:
     mock_session.__exit__ = MagicMock(return_value=False)
     mock_session_factory = MagicMock(return_value=mock_session)
     mock_settings = MagicMock()
-    mock_settings.EVENT_DRIVEN_DISPATCH = True
-    mock_settings.CELERY_TASK_CHAIN_EXPIRES = 3600
+    mock_settings.TASK_EXPIRY_SECONDS = 3600
 
     return (
         patch("src.api.config.get_settings", return_value=mock_settings),
