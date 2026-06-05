@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session
 
 from task_orchestrator.api.deps import get_db, get_service, get_tasks_repo, verify_api_key
 from task_orchestrator.api.schemas.journal import JournalEntrySchema, JournalResponse
-from task_orchestrator.api.schemas.tasks import ScheduleResponse, TaskListResponse, TaskSchema
+from task_orchestrator.api.schemas.tasks import (
+    LaunchSchema,
+    ScheduleResponse,
+    ScopeResponse,
+    TaskListResponse,
+    TaskSchema,
+)
 from task_orchestrator.domain.job import TaskNotFound
 from task_orchestrator.domain.launch import (
     FailedLaunch,
@@ -34,29 +40,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/scopes", tags=["tasks"])
 
 
-def _launch_to_dict(launch: TaskLaunch | None) -> Optional[dict[str, Any]]:
+def _launch_to_schema(launch: TaskLaunch | None) -> Optional[LaunchSchema]:
     if launch is None:
         return None
-    dict_launch: dict[str, Any] = {
-        "id": str(launch.id),
-        "status": launch.status.value,
-        "scheduled_at": launch.scheduled_at.isoformat(),
-        "scheduled_by": launch.scheduled_by,
-    }
+
+    launch_schema = LaunchSchema(
+        id=launch.id,
+        status=launch.status.value,
+        scheduled_at=launch.scheduled_at,
+        scheduled_by=launch.scheduled_by,
+    )
     match launch:
         case StartedLaunch():
-            dict_launch["started_at"] = launch.metadata.started_at.isoformat()
+            launch_schema.started_at = launch.metadata.started_at
         case SuccessfullyFinishedLaunch():
-            dict_launch["started_at"] = launch.metadata.started_at.isoformat()
-            dict_launch["finished_at"] = launch.metadata.finished_at.isoformat()
+            launch_schema.started_at = launch.metadata.started_at
+            launch_schema.finished_at = launch.metadata.finished_at
         case FailedLaunch():
-            dict_launch["started_at"] = launch.metadata.started_at.isoformat()
-            dict_launch["failed_at"] = launch.metadata.failed_at.isoformat()
-            dict_launch["is_aborted"] = launch.metadata.is_aborted
+            launch_schema.started_at = launch.metadata.started_at
+            launch_schema.failed_at = launch.metadata.failed_at
+            launch_schema.is_aborted = launch.metadata.is_aborted
         case SkippedLaunch():
-            dict_launch["started_at"] = launch.metadata.started_at.isoformat()
-            dict_launch["skipped_at"] = launch.metadata.skipped_at.isoformat()
-    return dict_launch
+            launch_schema.started_at = launch.metadata.started_at
+            launch_schema.skipped_at = launch.metadata.skipped_at
+    return launch_schema
 
 
 def _task_to_schema(task: ScopedTask) -> TaskSchema:
@@ -64,9 +71,9 @@ def _task_to_schema(task: ScopedTask) -> TaskSchema:
     latest_launch = None
     match task:
         case ScheduledScopedTask() | StartedScopedTask():
-            current_launch = _launch_to_dict(task.current_launch)
+            current_launch = _launch_to_schema(task.current_launch)
         case SuccessfullyFinishedScopedTask() | FailedScopedTask() | SkippedScopedTask():
-            latest_launch = _launch_to_dict(task.latest_launch)
+            latest_launch = _launch_to_schema(task.latest_launch)
 
     return TaskSchema(
         id=task.id,
@@ -80,12 +87,12 @@ def _task_to_schema(task: ScopedTask) -> TaskSchema:
     )
 
 
-@router.post("/{scope_id}", status_code=201)
+@router.post("/{scope_id}", status_code=201, response_model=ScopeResponse)
 def init_scope(
     scope_id: UUID,
     service: TasksManagementService = Depends(get_service),
     tasks_repo: FsTaskSpecificationsRepo = Depends(get_tasks_repo),
-) -> dict[str, str]:
+) -> ScopeResponse:
     """Create a new job for a scope. Idempotent — returns 409 if it already exists."""
     scope_str = str(scope_id)
     existing = service._jobs_repo.find_by_scope_id(scope_id=scope_str)
@@ -93,7 +100,7 @@ def init_scope(
         raise HTTPException(status_code=409, detail="Scope already exists")
     specs = tasks_repo.all()
     service.create_job(scope_id=scope_str, task_specs=specs)
-    return {"scope_id": scope_str}
+    return ScopeResponse(scope_id=scope_id)
 
 
 @router.get("/{scope_id}/tasks", response_model=TaskListResponse)

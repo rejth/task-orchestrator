@@ -65,13 +65,17 @@ pnpm run format       # Biome for client/shared files, Ruff format for server
 pnpm run lint         # Biome + Oxlint for client/shared files, Ruff for server
 pnpm run typecheck    # TypeScript for client/shared files, Pyright for server
 pnpm run test         # Client Vitest suite and server tests
-pnpm run api:generate # Write docs/api/openapi.json from the FastAPI app
+pnpm run api:generate # Write docs/api/openapi.json and generated client contract
 pnpm run check        # Full format, lint, typecheck, test, and API generation
 ```
 
 The Vite client is available at `http://localhost:5173` and proxies relative
 `/api` requests to the FastAPI server at `http://localhost:8000` during local
 development.
+
+The generated client API contract lives in `apps/client/src/lib/api-contract`.
+Run `pnpm run api:generate` from the repository root after changing FastAPI
+routes or Pydantic response schemas.
 
 ## API
 
@@ -103,9 +107,10 @@ FETCH_RAW_DATA
 ```
 apps/
 ├── client/
-│   ├── src/             # Svelte 5 tracer UI and client API boundary
-│   ├── vite.config.ts   # Vite dev proxy for /api
-│   └── package.json     # Client scripts and browser dependencies
+│   ├── src/                    # Svelte 5 tracer UI and client API boundary
+│   ├── src/lib/api-contract/   # Generated OpenAPI TypeScript and Zod contract
+│   ├── vite.config.ts          # Vite dev proxy for /api
+│   └── package.json            # Client scripts and browser dependencies
 └── server/
     ├── task_orchestrator/
     │   ├── api/            # FastAPI app, Depends providers, Pydantic schemas, router

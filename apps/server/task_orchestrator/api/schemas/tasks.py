@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -26,8 +26,8 @@ class TaskSchema(BaseModel):
     description: str
     depends_on: list[str]
     status: ScopedTaskStatus
-    current_launch: Optional[dict[str, Any]] = None
-    latest_launch: Optional[dict[str, Any]] = None
+    current_launch: Optional[LaunchSchema] = None
+    latest_launch: Optional[LaunchSchema] = None
 
 
 class TaskListResponse(BaseModel):
@@ -36,3 +36,7 @@ class TaskListResponse(BaseModel):
 
 class ScheduleResponse(BaseModel):
     tasks: list[TaskSchema]
+
+
+class ScopeResponse(BaseModel):
+    scope_id: UUID

@@ -63,6 +63,95 @@
         "title": "JournalResponse",
         "type": "object"
       },
+      "LaunchSchema": {
+        "properties": {
+          "failed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_aborted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Aborted"
+          },
+          "scheduled_at": {
+            "format": "date-time",
+            "title": "Scheduled At",
+            "type": "string"
+          },
+          "scheduled_by": {
+            "title": "Scheduled By",
+            "type": "string"
+          },
+          "skipped_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "scheduled_at",
+          "scheduled_by"
+        ],
+        "title": "LaunchSchema",
+        "type": "object"
+      },
       "LogLevel": {
         "enum": [
           "INFO",
@@ -94,6 +183,20 @@
           "tasks"
         ],
         "title": "ScheduleResponse",
+        "type": "object"
+      },
+      "ScopeResponse": {
+        "properties": {
+          "scope_id": {
+            "format": "uuid",
+            "title": "Scope Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope_id"
+        ],
+        "title": "ScopeResponse",
         "type": "object"
       },
       "ScopedTaskStatus": {
@@ -129,14 +232,12 @@
           "current_launch": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/LaunchSchema"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Current Launch"
+            ]
           },
           "depends_on": {
             "items": {
@@ -161,14 +262,12 @@
           "latest_launch": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/LaunchSchema"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Latest Launch"
+            ]
           },
           "spec_id": {
             "title": "Spec Id",
@@ -266,11 +365,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Init Scope Api Scopes  Scope Id  Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScopeResponse"
                 }
               }
             },
