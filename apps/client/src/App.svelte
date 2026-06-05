@@ -1,5 +1,12 @@
 <script lang="ts">
-import { ApiError, ApiValidationError, createApiClient, type Task } from "./lib/api";
+import {
+  ApiError,
+  ApiValidationError,
+  createApiClient,
+  type JournalEntry,
+  type Launch,
+  type Task,
+} from "./lib/api";
 import { clearApiKey, loadApiKey, saveApiKey } from "./lib/auth";
 
 let apiKey = $state(loadApiKey());
@@ -11,6 +18,15 @@ let successMessage = $state("");
 let isLoading = $state(false);
 let schedulingTaskId = $state("");
 let scheduleResult = $state<Task[]>([]);
+let stoppingRun = $state(false);
+let abortingLaunchId = $state("");
+let loadingJournalId = $state("");
+let selectedJournal = $state<{
+  taskLabel: string;
+  taskId: string;
+  launch: Launch;
+  entries: JournalEntry[];
+} | null>(null);
 
 const scopePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -26,6 +42,7 @@ function forgetKey() {
   tasks = [];
   activeScopeId = "";
   scheduleResult = [];
+  selectedJournal = null;
   successMessage = "";
   errorMessage = "The API key was cleared.";
 }
@@ -36,6 +53,7 @@ async function initializeScope() {
     activeScopeId = result.scope_id;
     tasks = await client.getTasks(result.scope_id);
     scheduleResult = [];
+    selectedJournal = null;
     successMessage = `Scope ${result.scope_id} was initialized.`;
   });
 }
@@ -45,6 +63,7 @@ async function selectScope() {
     tasks = await client.getTasks(cleanScopeId);
     activeScopeId = cleanScopeId;
     scheduleResult = [];
+    selectedJournal = null;
     successMessage = `Scope ${cleanScopeId} is selected.`;
   });
 }
@@ -65,9 +84,62 @@ async function scheduleTask(task: Task) {
   );
 }
 
+async function stopRun() {
+  await withApi(
+    async (client, cleanScopeId) => {
+      stoppingRun = true;
+      await client.stopRun(cleanScopeId);
+      tasks = await client.getTasks(cleanScopeId);
+      activeScopeId = cleanScopeId;
+      selectedJournal = null;
+      successMessage = `Run for Scope ${cleanScopeId} was stopped.`;
+    },
+    {
+      explainError: explainRunControlError,
+    },
+  );
+}
+
+async function abortLaunch(task: Task, launch: Launch) {
+  await withApi(
+    async (client, cleanScopeId) => {
+      abortingLaunchId = launch.id;
+      await client.abortLaunch(cleanScopeId, task.spec_id, launch.id);
+      tasks = await client.getTasks(cleanScopeId);
+      activeScopeId = cleanScopeId;
+      selectedJournal = null;
+      successMessage = `Launch ${launch.id} for ${task.label} was aborted.`;
+    },
+    {
+      explainError: explainLaunchOperationError,
+    },
+  );
+}
+
+async function loadJournal(task: Task, launch: Launch) {
+  await withApi(
+    async (client, cleanScopeId) => {
+      loadingJournalId = launch.id;
+      const result = await client.getJournal(cleanScopeId, task.spec_id, launch.id);
+      activeScopeId = cleanScopeId;
+      selectedJournal = {
+        taskLabel: task.label,
+        taskId: task.spec_id,
+        launch,
+        entries: result.journal,
+      };
+      successMessage = `Journal for ${task.label} was loaded.`;
+    },
+    {
+      explainError: explainJournalError,
+      preserveJournal: true,
+    },
+  );
+}
+
 async function withApi(
   action: (client: ReturnType<typeof createApiClient>, cleanScopeId: string) => Promise<void>,
-  options: { explainError?: (error: unknown) => string } = {},
+  options: { explainError?: (error: unknown) => string; preserveJournal?: boolean } = {},
 ) {
   const cleanKey = saveApiKey(apiKey);
   const cleanScopeId = scopeId.trim();
@@ -75,6 +147,9 @@ async function withApi(
   errorMessage = "";
   successMessage = "";
   scheduleResult = [];
+  if (!options.preserveJournal) {
+    selectedJournal = null;
+  }
 
   if (cleanKey.length === 0) {
     errorMessage = "Enter an API key before calling the server.";
@@ -112,6 +187,9 @@ async function withApi(
   } finally {
     isLoading = false;
     schedulingTaskId = "";
+    stoppingRun = false;
+    abortingLaunchId = "";
+    loadingJournalId = "";
   }
 }
 
@@ -148,6 +226,54 @@ function explainScheduleError(error: unknown) {
 
   if (error instanceof ApiValidationError) {
     return "The Schedule response from the server did not match the generated API contract.";
+  }
+
+  return explainError(error);
+}
+
+function explainRunControlError(error: unknown) {
+  if (error instanceof ApiError && error.status === 404) {
+    return "No Scope exists for that run. Initialize it first or enter another Scope ID.";
+  }
+
+  if (error instanceof ApiValidationError) {
+    return "The stop-run response from the server did not match the generated API contract.";
+  }
+
+  return explainError(error);
+}
+
+function explainLaunchOperationError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 404) {
+      return "That Scope, Task, or Launch was not found. Refresh the selected Scope and try again.";
+    }
+
+    if (error.status === 422) {
+      return "That Launch cannot be aborted in its current state.";
+    }
+  }
+
+  if (error instanceof ApiValidationError) {
+    return "The abort response from the server did not match the generated API contract.";
+  }
+
+  return explainError(error);
+}
+
+function explainJournalError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 404) {
+      return "That Scope, Task, or Launch Journal was not found.";
+    }
+
+    if (error.status === 422) {
+      return "That Launch ID could not be read.";
+    }
+  }
+
+  if (error instanceof ApiValidationError) {
+    return "The Journal response from the server did not match the generated API contract.";
   }
 
   return explainError(error);
@@ -256,6 +382,9 @@ function affectedTaskLabels() {
         <button type="button" class="secondary" onclick={selectScope} disabled={isLoading}>
           Select Scope
         </button>
+        <button type="button" class="danger" onclick={stopRun} disabled={isLoading || !activeScopeId}>
+          {stoppingRun ? "Stopping..." : "Stop Run"}
+        </button>
       </div>
 
       {#if errorMessage}
@@ -298,6 +427,7 @@ function affectedTaskLabels() {
         <ul class="tasks" aria-label="Tasks">
           {#each tasks as task}
             {@const summary = launchSummary(task)}
+            {@const currentLaunch = task.current_launch}
             <li>
               <div class="task-main">
                 <div class="task-title-row">
@@ -332,6 +462,26 @@ function affectedTaskLabels() {
                   >
                     {schedulingTaskId === task.spec_id ? "Scheduling..." : "Schedule"}
                   </button>
+                  {#if summary}
+                    <button
+                      type="button"
+                      class="ghost"
+                      onclick={() => loadJournal(task, summary.launch)}
+                      disabled={isLoading}
+                    >
+                      {loadingJournalId === summary.launch.id ? "Loading Journal..." : "Open Journal"}
+                    </button>
+                  {/if}
+                  {#if currentLaunch}
+                    <button
+                      type="button"
+                      class="danger"
+                      onclick={() => abortLaunch(task, currentLaunch)}
+                      disabled={isLoading}
+                    >
+                      {abortingLaunchId === currentLaunch.id ? "Aborting..." : "Abort Launch"}
+                    </button>
+                  {/if}
                 </div>
               </div>
 
@@ -361,6 +511,38 @@ function affectedTaskLabels() {
             </li>
           {/each}
         </ul>
+      {/if}
+
+      {#if selectedJournal}
+        <section class="journal-panel" aria-label="Launch Journal">
+          <div class="journal-heading">
+            <div class="journal-title">
+              <span>Launch Journal</span>
+              <strong>{selectedJournal.taskLabel}</strong>
+              <small>{selectedJournal.taskId} / {selectedJournal.launch.id}</small>
+            </div>
+            <button type="button" class="ghost" onclick={() => (selectedJournal = null)}>
+              Close
+            </button>
+          </div>
+
+          {#if selectedJournal.entries.length === 0}
+            <p class="journal-empty">This Launch does not have Journal entries yet.</p>
+          {:else}
+            <ol class="journal-entries">
+              {#each selectedJournal.entries as entry}
+                <li>
+                  <div class="journal-entry-heading">
+                    <strong>{entry.level}</strong>
+                    <span>{entry.type}</span>
+                    <time datetime={entry.timestamp}>{formatLaunchTime(entry.timestamp)}</time>
+                  </div>
+                  <p>{entry.message}</p>
+                </li>
+              {/each}
+            </ol>
+          {/if}
+        </section>
       {/if}
     </div>
   </section>
