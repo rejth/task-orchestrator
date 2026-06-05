@@ -44,6 +44,15 @@ services:
       redis:
         condition: service_healthy
 
+  client:
+    build:
+      context: .
+      dockerfile: apps/client/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
   worker:
     build:
       context: ./apps/server
