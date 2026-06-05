@@ -8,9 +8,11 @@
   "plugins": ["typescript", "unicorn"],
   "ignorePatterns": [
     "apps/server/**",
+    "apps/client/node_modules/**",
     "docs/**",
     "htmlcov/**",
     "node_modules/**",
+    "**/node_modules/**",
     "dist/**",
     "build/**",
     "coverage/**"
