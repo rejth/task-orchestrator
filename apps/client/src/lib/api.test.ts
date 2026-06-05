@@ -108,6 +108,66 @@ describe("api client", () => {
     );
   });
 
+  it("deletes the current run for a Scope", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+
+    await expect(client.stopRun(scopeId)).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/scopes/${scopeId}/run`,
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({ "X-API-Key": "secret-key" }),
+      }),
+    );
+  });
+
+  it("deletes an individual Launch for abort", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+
+    await expect(
+      client.abortLaunch(scopeId, "FETCH_RAW_DATA", "00000000-0000-4000-8000-000000000003"),
+    ).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/launches/00000000-0000-4000-8000-000000000003`,
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("parses generated Journal contracts", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        journal: [
+          {
+            id: "00000000-0000-4000-8000-000000000004",
+            message: "Started handler",
+            level: "INFO",
+            type: "UNCLASSIFIED",
+            timestamp: "2026-06-05T16:53:52.956653+00:00",
+          },
+        ],
+      }),
+    );
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+    const result = await client.getJournal(
+      scopeId,
+      "FETCH_RAW_DATA",
+      "00000000-0000-4000-8000-000000000003",
+    );
+
+    expect(result.journal).toEqual([expect.objectContaining({ message: "Started handler" })]);
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/launches/00000000-0000-4000-8000-000000000003/journal`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-API-Key": "secret-key" }),
+      }),
+    );
+  });
+
   it("normalizes response validation failures", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ tasks: [{ id: "not-a-uuid" }] }));
 

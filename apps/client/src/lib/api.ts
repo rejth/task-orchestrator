@@ -1,8 +1,17 @@
 import { type ZodType, z } from "zod";
-import type { TaskListResponse, TaskSchema } from "./api-contract";
+import type {
+  JournalEntrySchema,
+  JournalResponse,
+  LaunchSchema,
+  TaskListResponse,
+  TaskSchema,
+} from "./api-contract";
 import {
+  zAbortTaskApiScopesScopeIdTasksTaskIdLaunchesLaunchIdDeleteResponse,
   zInitScopeApiScopesScopeIdPostResponse,
+  zJournalEntrySchema,
   zLaunchSchema,
+  zStopRunApiScopesScopeIdRunDeleteResponse,
   zTaskSchema,
 } from "./api-contract/zod.gen";
 
@@ -24,6 +33,8 @@ export class ApiValidationError extends Error {
 }
 
 export type Task = TaskSchema;
+export type Launch = LaunchSchema;
+export type JournalEntry = JournalEntrySchema;
 
 const localDateTime = z.iso.datetime({ local: true, offset: true });
 const launchSchema = zLaunchSchema.extend({
@@ -40,6 +51,12 @@ const taskSchema = zTaskSchema.extend({
 const taskListResponseSchema = z.object({
   tasks: z.array(taskSchema),
 }) satisfies ZodType<TaskListResponse>;
+const journalEntrySchema = zJournalEntrySchema.extend({
+  timestamp: localDateTime,
+});
+const journalResponseSchema = z.object({
+  journal: z.array(journalEntrySchema),
+}) satisfies ZodType<JournalResponse>;
 
 type ApiClientOptions = {
   apiKey: string;
@@ -99,6 +116,30 @@ export function createApiClient({ apiKey, onUnauthorized }: ApiClientOptions) {
         },
       );
       return result.tasks;
+    },
+    async stopRun(scopeId: string) {
+      return request(
+        `/api/scopes/${encodeURIComponent(scopeId)}/run`,
+        zStopRunApiScopesScopeIdRunDeleteResponse,
+        {
+          method: "DELETE",
+        },
+      );
+    },
+    async abortLaunch(scopeId: string, taskId: string, launchId: string) {
+      return request(
+        `/api/scopes/${encodeURIComponent(scopeId)}/tasks/${encodeURIComponent(taskId)}/launches/${encodeURIComponent(launchId)}`,
+        zAbortTaskApiScopesScopeIdTasksTaskIdLaunchesLaunchIdDeleteResponse,
+        {
+          method: "DELETE",
+        },
+      );
+    },
+    async getJournal(scopeId: string, taskId: string, launchId: string) {
+      return request(
+        `/api/scopes/${encodeURIComponent(scopeId)}/tasks/${encodeURIComponent(taskId)}/launches/${encodeURIComponent(launchId)}/journal`,
+        journalResponseSchema,
+      );
     },
   };
 }

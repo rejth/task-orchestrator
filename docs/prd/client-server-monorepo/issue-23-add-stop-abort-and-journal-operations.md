@@ -10,12 +10,12 @@ Add the remaining operator controls to the Job/Task console: stop the current ru
 
 ## Acceptance criteria
 
-- [ ] The console exposes a stop-run action for the selected Scope and updates the Job state after a successful stop.
-- [ ] The console exposes an abort action for an individual Launch when Launch information is available and updates the Task view after a successful abort.
-- [ ] The console can load and display a Launch Journal through the validated API client.
-- [ ] Journal entries show message, level, type, and timestamp in a readable operator-facing view.
-- [ ] Missing Scope, unknown Task, missing Launch, authentication failure, validation failure, and server error states are handled clearly.
-- [ ] Client behavior tests or documented verification cover stop-run, Launch abort, Journal display, and representative failure states.
+- [x] The console exposes a stop-run action for the selected Scope and updates the Job state after a successful stop.
+- [x] The console exposes an abort action for an individual Launch when Launch information is available and updates the Task view after a successful abort.
+- [x] The console can load and display a Launch Journal through the validated API client.
+- [x] Journal entries show message, level, type, and timestamp in a readable operator-facing view.
+- [x] Missing Scope, unknown Task, missing Launch, authentication failure, validation failure, and server error states are handled clearly.
+- [x] Client behavior tests or documented verification cover stop-run, Launch abort, Journal display, and representative failure states.
 
 ## Blocked by
 

@@ -200,6 +200,155 @@ describe("operator tracer", () => {
     expect(fetch).toHaveBeenNthCalledWith(3, `/api/scopes/${scopeId}/tasks`, expect.any(Object));
   });
 
+  it("stops the selected Scope run and refreshes the Task list", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "PENDING",
+              current_launch: launchResponse(),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "FAILED",
+              latest_launch: {
+                ...launchResponse(),
+                status: "FAILED",
+                failed_at: "2026-06-05T10:03:00Z",
+                is_aborted: true,
+              },
+            }),
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Stop Run" }));
+
+    expect(await screen.findByText(`Run for Scope ${scopeId} was stopped.`)).toBeInTheDocument();
+    expect(screen.getAllByText("FAILED")).toHaveLength(2);
+    expect(screen.getByText("Aborted")).toBeInTheDocument();
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      `/api/scopes/${scopeId}/run`,
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("aborts an active Launch and refreshes the Task view", async () => {
+    const launchId = "00000000-0000-4000-8000-000000000003";
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "PENDING",
+              current_launch: launchResponse(launchId),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "FAILED",
+              latest_launch: {
+                ...launchResponse(launchId),
+                status: "FAILED",
+                failed_at: "2026-06-05T10:03:00Z",
+                is_aborted: true,
+              },
+            }),
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Abort Launch" }));
+
+    expect(
+      await screen.findByText(`Launch ${launchId} for Fetch raw data was aborted.`),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("FAILED")).toHaveLength(2);
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/launches/${launchId}`,
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("loads and displays a Launch Journal", async () => {
+    const launchId = "00000000-0000-4000-8000-000000000003";
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "SUCCESS",
+              latest_launch: { ...launchResponse(launchId), status: "FINISHED" },
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          journal: [
+            {
+              id: "00000000-0000-4000-8000-000000000004",
+              message: "Handler started",
+              level: "INFO",
+              type: "UNCLASSIFIED",
+              timestamp: "2026-06-05T16:53:52.956653+00:00",
+            },
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Open Journal" }));
+
+    expect(await screen.findByText("Launch Journal")).toBeInTheDocument();
+    expect(screen.getByText("Handler started")).toBeInTheDocument();
+    expect(screen.getByText("INFO")).toBeInTheDocument();
+    expect(screen.getByText("UNCLASSIFIED")).toBeInTheDocument();
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/launches/${launchId}/journal`,
+      expect.any(Object),
+    );
+  });
+
   it("clears the stored API key after a 401 response", async () => {
     localStorage.setItem("task-orchestrator.api-key", "expired-key");
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, 401));
@@ -282,6 +431,51 @@ describe("operator tracer", () => {
     );
   });
 
+  it("shows a stop-run message for a missing Scope", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ tasks: [] }))
+      .mockResolvedValueOnce(jsonResponse({ detail: "Job was not found" }, 404));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Stop Run" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No Scope exists for that run. Initialize it first or enter another Scope ID.",
+    );
+  });
+
+  it("shows an abort message for an unknown Task or missing Launch", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "PENDING",
+              current_launch: launchResponse(),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ detail: "Launch was not found" }, 404));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Abort Launch" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That Scope, Task, or Launch was not found. Refresh the selected Scope and try again.",
+    );
+  });
+
   it("shows a Schedule-specific message when the Task cannot be Scheduled", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(
@@ -352,6 +546,34 @@ describe("operator tracer", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The Schedule response from the server did not match the generated API contract.",
+    );
+  });
+
+  it("shows generated-contract validation failures for invalid Journal responses", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "SUCCESS",
+              latest_launch: { ...launchResponse(), status: "FINISHED" },
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ journal: [{ id: "not-a-uuid" }] }));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Open Journal" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The Journal response from the server did not match the generated API contract.",
     );
   });
 
