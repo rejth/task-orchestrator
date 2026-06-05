@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "target": "ES2024",
+    "types": []
+  },
+  "include": [
+    "types/**/*.d.ts",
+    "*.config.js",
+    "*.config.ts",
+    "apps/client/src/**/*.js",
+    "apps/client/src/**/*.ts",
+    "apps/client/src/**/*.svelte",
+    "packages/**/*.js",
+    "packages/**/*.ts"
+  ],
+  "exclude": ["node_modules", "apps/server", "docs", "htmlcov"]
+}

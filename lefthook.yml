@@ -1,0 +1,21 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,jsx,ts,tsx,svelte,json,jsonc,css}"
+      run: pnpm exec biome check --write --staged {staged_files}
+      stage_fixed: true
+    oxlint:
+      glob: "*.{js,jsx,ts,tsx,svelte}"
+      run: pnpm exec oxlint --fix --deny-warnings {staged_files}
+      stage_fixed: true
+    ruff:
+      root: apps/server
+      glob: "*.py"
+      run: uv run ruff check --fix --force-exclude {staged_files}
+      stage_fixed: true
+
+pre-push:
+  commands:
+    check:
+      run: pnpm run check

@@ -1,0 +1,38 @@
+{
+  "name": "task-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm run dev:server",
+    "dev:server": "pnpm --filter @task-orchestrator/server dev",
+    "dev:worker": "pnpm --filter @task-orchestrator/server dev:worker",
+    "dev:beat": "pnpm --filter @task-orchestrator/server dev:beat",
+    "format": "pnpm run format:client && pnpm run format:server",
+    "format:check": "pnpm run format:client:check && pnpm run format:server:check",
+    "format:client": "biome format --write .",
+    "format:client:check": "biome format .",
+    "format:server": "pnpm --filter @task-orchestrator/server format",
+    "format:server:check": "pnpm --filter @task-orchestrator/server format:check",
+    "lint": "pnpm run lint:client && pnpm run lint:server",
+    "lint:fix": "pnpm run lint:client:fix && pnpm run lint:server:fix",
+    "lint:client": "biome lint . && oxlint --deny-warnings .",
+    "lint:client:fix": "biome lint --write . && oxlint --fix --deny-warnings .",
+    "lint:server": "pnpm --filter @task-orchestrator/server lint",
+    "lint:server:fix": "pnpm --filter @task-orchestrator/server lint:fix",
+    "typecheck": "pnpm run typecheck:client && pnpm run typecheck:server",
+    "typecheck:client": "tsc --noEmit --project tsconfig.json",
+    "typecheck:server": "pnpm --filter @task-orchestrator/server typecheck",
+    "test": "pnpm run test:server",
+    "test:server": "pnpm --filter @task-orchestrator/server test",
+    "api:generate": "pnpm --filter @task-orchestrator/server api:generate",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run api:generate",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.16",
+    "lefthook": "2.1.9",
+    "oxlint": "1.68.0",
+    "typescript": "6.0.3"
+  }
+}

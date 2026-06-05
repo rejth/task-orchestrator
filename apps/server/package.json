@@ -1,0 +1,18 @@
+{
+  "name": "@task-orchestrator/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "uv run uvicorn task_orchestrator.api.app:app --reload",
+    "dev:worker": "uv run celery -A task_orchestrator.workers.consumer worker --loglevel=info",
+    "dev:beat": "uv run celery -A task_orchestrator.workers.consumer beat --loglevel=info --schedule=.celerybeat-schedule",
+    "format": "uv run ruff format task_orchestrator tests",
+    "format:check": "uv run ruff format --check task_orchestrator tests",
+    "lint": "uv run ruff check task_orchestrator tests",
+    "lint:fix": "uv run ruff check task_orchestrator tests --fix",
+    "typecheck": "uv run pyright task_orchestrator tests",
+    "test": "uv run pytest tests/",
+    "api:generate": "uv run python scripts/generate_openapi.py"
+  }
+}

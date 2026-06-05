@@ -6,7 +6,7 @@ Each **Scope** owns a **Job** — a directed acyclic graph of **Tasks**. Schedul
 
 ## Stack
 
-Python 3.13 · uv · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL · Celery + Redis · Ruff · Pyright · Docker
+pnpm workspace · Python 3.13 · uv · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL · Celery + Redis · Ruff · Pyright · TypeScript · Biome · Oxlint · Lefthook · Docker
 
 ## Quickstart
 
@@ -21,27 +21,49 @@ API available at `http://localhost:8000/api` — interactive docs at `http://loc
 
 ### Local dev
 
-**Prerequisites:** Python 3.13, uv, PostgreSQL, Redis running locally.
+**Prerequisites:** pnpm 10, Python 3.13, uv, PostgreSQL, Redis running locally.
+
+Install the root workspace once:
 
 ```bash
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+pnpm install
+```
 
-# Install dependencies
-cd apps/server
-uv sync
+pnpm orchestrates workspace commands from the repository root. Python dependency
+management still belongs to uv inside `apps/server`; the pnpm server package only
+delegates commands into that uv-managed workspace.
 
-# Copy and edit env
-cp ../../.env.example .env  # set DATABASE_URL and REDIS_URL to your local instances
+```bash
+# Install server dependencies
+pnpm --filter @task-orchestrator/server exec uv sync
+
+# Copy and edit env for local services
+cp .env.example apps/server/.env
 
 # Run migrations
-uv run alembic upgrade head
+pnpm --filter @task-orchestrator/server exec uv run alembic upgrade head
 
 # Start API server
-uv run uvicorn task_orchestrator.api.app:app --reload
+pnpm run dev:server
 
 # Start Celery worker (separate terminal)
-uv run celery -A task_orchestrator.workers.consumer worker --loglevel=info
+pnpm run dev:worker
+
+# Start Celery beat scheduler (separate terminal)
+pnpm run dev:beat
+```
+
+## Workspace Commands
+
+Run shared commands from the repository root:
+
+```bash
+pnpm run format       # Biome for client/shared files, Ruff format for server
+pnpm run lint         # Biome + Oxlint for client/shared files, Ruff for server
+pnpm run typecheck    # TypeScript for client/shared files, Pyright for server
+pnpm run test         # Server tests
+pnpm run api:generate # Write docs/api/openapi.json from the FastAPI app
+pnpm run check        # Full format, lint, typecheck, test, and API generation
 ```
 
 ## API
@@ -89,10 +111,8 @@ apps/
 
 ## Tests
 
-Run server commands from `apps/server`.
-
 ```bash
-uv run pytest tests/ -v
+pnpm run test
 ```
 
 Unit tests need no external services — SQLite in-memory used for integration tests.
@@ -100,6 +120,7 @@ Unit tests need no external services — SQLite in-memory used for integration t
 Coverage report:
 
 ```bash
+cd apps/server
 uv run coverage run -m pytest tests/ && uv run coverage html
 # open htmlcov/index.html
 ```
@@ -107,14 +128,9 @@ uv run coverage run -m pytest tests/ && uv run coverage html
 ## Code quality
 
 ```bash
-# Lint + auto-fix
-uv run ruff check task_orchestrator tests --fix
-
-# Type check
-uv run pyright task_orchestrator tests
-
-# Both
-uv run ruff check task_orchestrator tests --fix && uv run pyright task_orchestrator tests
+pnpm run lint:fix
+pnpm run typecheck
+pnpm run check
 ```
 
 ## Database migrations
@@ -122,6 +138,7 @@ uv run ruff check task_orchestrator tests --fix && uv run pyright task_orchestra
 Generate a migration after changing ORM models:
 
 ```bash
+cd apps/server
 uv run alembic revision --autogenerate -m "describe change"
 uv run alembic upgrade head
 ```
