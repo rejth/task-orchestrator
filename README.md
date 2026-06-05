@@ -17,7 +17,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-API available at `http://localhost:8000` — interactive docs at `http://localhost:8000/docs`.
+API available at `http://localhost:8000/api` — interactive docs at `http://localhost:8000/docs`.
 
 ### Local dev
 
@@ -28,32 +28,33 @@ API available at `http://localhost:8000` — interactive docs at `http://localho
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install dependencies
+cd apps/server
 uv sync
 
 # Copy and edit env
-cp .env.example .env  # set DATABASE_URL and REDIS_URL to your local instances
+cp ../../.env.example .env  # set DATABASE_URL and REDIS_URL to your local instances
 
 # Run migrations
 uv run alembic upgrade head
 
 # Start API server
-uv run uvicorn src.api.app:app --reload
+uv run uvicorn task_orchestrator.api.app:app --reload
 
 # Start Celery worker (separate terminal)
-uv run celery -A src.workers.consumer worker --loglevel=info
+uv run celery -A task_orchestrator.workers.consumer worker --loglevel=info
 ```
 
 ## API
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/scopes/{scope_id}` | Create a job for a scope (returns 409 if exists) |
-| `GET` | `/scopes/{scope_id}/tasks` | List all tasks with current status |
-| `POST` | `/scopes/{scope_id}/tasks/{task_id}/schedule` | Schedule task + all downstream, dispatch to Celery |
-| `DELETE` | `/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}` | Abort a running launch |
-| `GET` | `/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}/journal` | Fetch execution logs |
+| `POST` | `/api/scopes/{scope_id}` | Create a job for a scope (returns 409 if exists) |
+| `GET` | `/api/scopes/{scope_id}/tasks` | List all tasks with current status |
+| `POST` | `/api/scopes/{scope_id}/tasks/{task_id}/schedule` | Schedule task + all downstream, dispatch to Celery |
+| `DELETE` | `/api/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}` | Abort a running launch |
+| `GET` | `/api/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}/journal` | Fetch execution logs |
 
-Pass `X-User: <name>` header to attribute scheduling actions.
+Pass `X-API-Key: <key>` on API requests. Scheduling actions are attributed to the authenticated API key.
 
 ## Demo task graph
 
@@ -71,20 +72,24 @@ FETCH_RAW_DATA
 ## Project structure
 
 ```
-src/
-├── api/            # FastAPI app, Depends providers, Pydantic schemas, router
-├── domain/         # State machines: ScopedJob, ScopedTask, TaskLaunch, journal
-├── services/       # Business logic, task dispatcher, event-driven dispatch
-├── infrastructure/ # SQLAlchemy models, SQLJobsRepository, Celery runner
-├── handlers/       # TaskHandlerInterface + DemoHandler
-└── workers/        # Celery consumer entry point
-tests/
-├── unit/domain/    # Pure domain tests (no DB, no HTTP)
-└── integration/    # 9 API tests against SQLite in-memory
-alembic/versions/   # Single initial migration (5 tables)
+apps/
+└── server/
+    ├── task_orchestrator/
+    │   ├── api/            # FastAPI app, Depends providers, Pydantic schemas, router
+    │   ├── domain/         # State machines: ScopedJob, ScopedTask, TaskLaunch, journal
+    │   ├── services/       # Business logic, task dispatcher, event-driven dispatch
+    │   ├── infrastructure/ # SQLAlchemy models, SQLJobsRepository, Celery runner
+    │   ├── handlers/       # TaskHandlerInterface + DemoHandler
+    │   └── workers/        # Celery consumer entry point
+    ├── tests/
+    │   ├── unit/domain/    # Pure domain tests (no DB, no HTTP)
+    │   └── integration/    # API tests against SQLite in-memory
+    └── alembic/versions/   # Single initial migration (5 tables)
 ```
 
 ## Tests
+
+Run server commands from `apps/server`.
 
 ```bash
 uv run pytest tests/ -v
@@ -103,13 +108,13 @@ uv run coverage run -m pytest tests/ && uv run coverage html
 
 ```bash
 # Lint + auto-fix
-uv run ruff check src tests --fix
+uv run ruff check task_orchestrator tests --fix
 
 # Type check
-uv run pyright src tests
+uv run pyright task_orchestrator tests
 
 # Both
-uv run ruff check src tests --fix && uv run pyright src tests
+uv run ruff check task_orchestrator tests --fix && uv run pyright task_orchestrator tests
 ```
 
 ## Database migrations
@@ -123,11 +128,11 @@ uv run alembic upgrade head
 
 ## Adding a real task handler
 
-1. Implement `TaskHandlerInterface` in `src/handlers/`:
+1. Implement `TaskHandlerInterface` in `task_orchestrator/handlers/`:
 
 ```python
-from src.domain.journal import Log
-from src.handlers.interface import TaskHandleStatus
+from task_orchestrator.domain.journal import Log
+from task_orchestrator.handlers.interface import TaskHandleStatus
 
 class MyHandler:
     def run(self, scope_id: str) -> tuple[TaskHandleStatus, list[Log]]:
@@ -135,7 +140,7 @@ class MyHandler:
         return TaskHandleStatus.SUCCESS, []
 ```
 
-1. Register it in `src/infrastructure/celery/runner.py`:
+1. Register it in `task_orchestrator/infrastructure/celery/runner.py`:
 
 ```python
 _HANDLERS: dict[TaskSpecificationId, type] = {
@@ -144,4 +149,4 @@ _HANDLERS: dict[TaskSpecificationId, type] = {
 }
 ```
 
-1. Add the task ID to `TaskSpecificationId` in `src/domain/task.py` and wire its `depends_on`.
+1. Add the task ID to `TaskSpecificationId` in `task_orchestrator/domain/task.py` and wire its `depends_on`.
