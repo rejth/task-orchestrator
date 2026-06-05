@@ -8,6 +8,7 @@
   "plugins": ["typescript", "unicorn"],
   "ignorePatterns": [
     "apps/server/**",
+    "apps/client/src/lib/api-contract/**",
     "apps/client/node_modules/**",
     "docs/**",
     "htmlcov/**",
