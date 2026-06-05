@@ -203,16 +203,23 @@ label {
 
 .tasks li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 16px;
+  align-items: stretch;
   border: 1px solid #e3e9eb;
   border-radius: 8px;
   padding: 14px;
 }
 
+.task-main,
+.launch-summary {
+  min-width: 0;
+}
+
 .tasks strong,
-.tasks span {
+.tasks span,
+.tasks dd,
+.tasks dt {
   display: block;
 }
 
@@ -220,13 +227,59 @@ label {
   margin-bottom: 4px;
 }
 
-.tasks div span {
+.task-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.task-main p {
+  margin: 12px 0;
+  color: #33464f;
+  line-height: 1.45;
+}
+
+.task-title-row div span,
+.launch-id {
   color: #61717a;
   font-size: 0.84rem;
   overflow-wrap: anywhere;
 }
 
+.metadata-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.metadata-label,
+.launch-label {
+  color: #6d7d85;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dependency {
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: #39525b;
+  background: #eef3f4;
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.empty-dependency {
+  color: #5f7078;
+  background: #f5f7f8;
+}
+
 .status {
+  align-self: start;
   border-radius: 999px;
   padding: 6px 10px;
   color: #33464f;
@@ -252,6 +305,68 @@ label {
   background: #fde2df;
 }
 
+.status-skipped {
+  color: #4a4f27;
+  background: #eef1d8;
+}
+
+.launch-summary {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  border-left: 3px solid #d9e1e4;
+  border-radius: 6px;
+  padding: 12px;
+  background: #f8fafb;
+  color: #3b4b54;
+  font-size: 0.86rem;
+}
+
+.launch-summary.active {
+  border-color: #bf7f00;
+  background: #fff8e8;
+}
+
+.launch-summary.terminal {
+  border-color: #61717a;
+  background: #f3f6f7;
+}
+
+.launch-summary.none {
+  color: #61717a;
+}
+
+.launch-summary strong {
+  color: #172026;
+}
+
+.launch-summary dl {
+  display: grid;
+  gap: 5px;
+  margin: 4px 0 0;
+}
+
+.launch-summary dl div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.launch-summary dt {
+  color: #6d7d85;
+  font-weight: 700;
+}
+
+.launch-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.aborted {
+  color: #7a261f;
+  font-weight: 800;
+}
+
 @media (max-width: 780px) {
   .toolbar,
   .workspace {
@@ -265,5 +380,14 @@ label {
 
   button {
     flex: 1 1 150px;
+  }
+
+  .tasks li,
+  .task-title-row {
+    grid-template-columns: 1fr;
+  }
+
+  .status {
+    justify-self: start;
   }
 }
