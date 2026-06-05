@@ -17,7 +17,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 COPY task_orchestrator ./task_orchestrator
 
-RUN useradd --no-create-home --shell /bin/false celery
+RUN useradd --no-create-home --shell /bin/false celery \
+    && mkdir -p /app/run \
+    && chown celery:celery /app/run
 USER celery
 
 CMD ["celery", "-A", "task_orchestrator.workers.consumer", "worker", "--loglevel=info", "--concurrency=4"]
