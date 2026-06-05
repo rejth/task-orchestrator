@@ -1,0 +1,17 @@
+.git
+.agents
+.claude
+.DS_Store
+node_modules
+apps/*/node_modules
+apps/server/.venv
+apps/server/htmlcov
+apps/server/.pytest_cache
+apps/server/.ruff_cache
+apps/client/dist
+apps/client/coverage
+**/__pycache__
+**/.mypy_cache
+**/.pyright
+**/.svelte-kit
+**/.turbo

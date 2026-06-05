@@ -17,7 +17,31 @@ cp .env.example .env
 docker compose up --build
 ```
 
-API available at `http://localhost:8000/api` — interactive docs at `http://localhost:8000/docs`.
+Client available at `http://localhost:5173`. API available at
+`http://localhost:8000/api` — interactive docs at `http://localhost:8000/docs`.
+
+The Compose client image builds the Svelte app and serves it with nginx. Browser
+requests stay on the relative `/api` boundary; nginx proxies those requests to
+the `api` service inside the Compose network.
+
+Full-stack smoke path:
+
+1. Open `http://localhost:5173`.
+2. Enter the `API_KEY` value from `.env`.
+3. Enter a UUID Scope ID, for example `00000000-0000-4000-8000-000000000001`.
+4. Click **Initialize Scope**. The Task console should load the Job Task list.
+5. Click **Select Scope** with the same Scope ID after refreshing the page. The
+   client should reach the API through `/api` and display the same Tasks.
+
+Useful container commands:
+
+```bash
+docker compose ps
+docker compose logs api
+docker compose logs client
+docker compose logs worker
+docker compose down
+```
 
 ### Local dev
 
@@ -56,6 +80,10 @@ pnpm run dev:worker
 pnpm run dev:beat
 ```
 
+Local browser client: `http://localhost:5173`. During local development Vite
+proxies `/api` to `http://localhost:8000`, so the client uses the same relative
+API boundary as the containerized setup.
+
 ## Workspace Commands
 
 Run shared commands from the repository root:
@@ -77,6 +105,10 @@ The generated client API contract lives in `apps/client/src/lib/api-contract`.
 Run `pnpm run api:generate` from the repository root after changing FastAPI
 routes or Pydantic response schemas.
 
+`pnpm run check` also runs API generation after formatting, linting,
+typechecking, and tests. If generated OpenAPI or client contract files change,
+review and commit those changes with the API change that caused them.
+
 ## API
 
 | Method | Path | Description |
@@ -84,6 +116,7 @@ routes or Pydantic response schemas.
 | `POST` | `/api/scopes/{scope_id}` | Create a job for a scope (returns 409 if exists) |
 | `GET` | `/api/scopes/{scope_id}/tasks` | List all tasks with current status |
 | `POST` | `/api/scopes/{scope_id}/tasks/{task_id}/schedule` | Schedule task + all downstream, dispatch to Celery |
+| `DELETE` | `/api/scopes/{scope_id}/run` | Stop all pending and in-progress work for a scope |
 | `DELETE` | `/api/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}` | Abort a running launch |
 | `GET` | `/api/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}/journal` | Fetch execution logs |
 
