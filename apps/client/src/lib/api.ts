@@ -12,19 +12,17 @@ export class ApiError extends Error {
 
 const taskStatusSchema = z.enum(["NEW", "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED", "SKIPPED"]);
 
-const launchSchema = z
-  .object({
-    id: z.string(),
-    status: z.string(),
-    scheduled_at: z.string(),
-    scheduled_by: z.string().nullable().optional(),
-    started_at: z.string().optional(),
-    finished_at: z.string().optional(),
-    failed_at: z.string().optional(),
-    skipped_at: z.string().optional(),
-    is_aborted: z.boolean().optional(),
-  })
-  .passthrough();
+const launchSchema = z.looseObject({
+  id: z.string(),
+  status: z.string(),
+  scheduled_at: z.string(),
+  scheduled_by: z.string().nullable().optional(),
+  started_at: z.string().optional(),
+  finished_at: z.string().optional(),
+  failed_at: z.string().optional(),
+  skipped_at: z.string().optional(),
+  is_aborted: z.boolean().optional(),
+});
 
 export const taskSchema = z.object({
   id: z.string(),
