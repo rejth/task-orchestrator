@@ -46,6 +46,9 @@ pnpm --filter @task-orchestrator/server exec uv run alembic upgrade head
 # Start API server
 pnpm run dev:server
 
+# Start browser client (separate terminal)
+pnpm run dev:client
+
 # Start Celery worker (separate terminal)
 pnpm run dev:worker
 
@@ -61,10 +64,14 @@ Run shared commands from the repository root:
 pnpm run format       # Biome for client/shared files, Ruff format for server
 pnpm run lint         # Biome + Oxlint for client/shared files, Ruff for server
 pnpm run typecheck    # TypeScript for client/shared files, Pyright for server
-pnpm run test         # Server tests
+pnpm run test         # Client Vitest suite and server tests
 pnpm run api:generate # Write docs/api/openapi.json from the FastAPI app
 pnpm run check        # Full format, lint, typecheck, test, and API generation
 ```
+
+The Vite client is available at `http://localhost:5173` and proxies relative
+`/api` requests to the FastAPI server at `http://localhost:8000` during local
+development.
 
 ## API
 
@@ -95,6 +102,10 @@ FETCH_RAW_DATA
 
 ```
 apps/
+├── client/
+│   ├── src/             # Svelte 5 tracer UI and client API boundary
+│   ├── vite.config.ts   # Vite dev proxy for /api
+│   └── package.json     # Client scripts and browser dependencies
 └── server/
     ├── task_orchestrator/
     │   ├── api/            # FastAPI app, Depends providers, Pydantic schemas, router
