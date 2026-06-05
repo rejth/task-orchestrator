@@ -1,5 +1,5 @@
 <script lang="ts">
-import { ApiError, createApiClient, type Task } from "./lib/api";
+import { ApiError, ApiValidationError, createApiClient, type Task } from "./lib/api";
 import { clearApiKey, loadApiKey, saveApiKey } from "./lib/auth";
 
 let apiKey = $state(loadApiKey());
@@ -82,6 +82,10 @@ async function withApi(
       tasks = [];
       activeScopeId = "";
     }
+    if (error instanceof ApiValidationError) {
+      tasks = [];
+      activeScopeId = "";
+    }
   } finally {
     isLoading = false;
   }
@@ -100,7 +104,69 @@ function explainError(error: unknown) {
     return error.message;
   }
 
+  if (error instanceof ApiValidationError) {
+    return "The Task list from the server did not match the generated API contract.";
+  }
+
   return "The server response could not be read. Check the API is running and try again.";
+}
+
+function displayStatus(status: string) {
+  return status.replace(/_/g, " ");
+}
+
+function launchSummary(task: Task) {
+  if (task.current_launch) {
+    return {
+      label: "Current Launch",
+      kind: "active",
+      launch: task.current_launch,
+    };
+  }
+
+  if (task.latest_launch) {
+    return {
+      label: "Latest Launch",
+      kind: "terminal",
+      launch: task.latest_launch,
+    };
+  }
+
+  return undefined;
+}
+
+function formatLaunchTime(value: string | null | undefined) {
+  if (!value) {
+    return "not recorded";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function launchTiming(task: Task) {
+  const launch = task.current_launch ?? task.latest_launch;
+
+  if (!launch) {
+    return [];
+  }
+
+  return [
+    ["Scheduled", launch.scheduled_at],
+    ["Started", launch.started_at],
+    ["Finished", launch.finished_at],
+    ["Failed", launch.failed_at],
+    ["Skipped", launch.skipped_at],
+  ].filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
+  );
 }
 </script>
 
@@ -161,18 +227,68 @@ function explainError(error: unknown) {
       </div>
 
       {#if tasks.length === 0}
-        <div class="empty">Initialize or select a Scope to load its task snapshot.</div>
+        <div class="empty">
+          {#if isLoading}
+            Loading Task list for this Scope...
+          {:else if activeScopeId}
+            This Scope does not have any Tasks in its Job.
+          {:else}
+            Select or initialize a Scope to load its Job Task list.
+          {/if}
+        </div>
       {:else}
         <ul class="tasks" aria-label="Tasks">
           {#each tasks as task}
+            {@const summary = launchSummary(task)}
             <li>
-              <div>
-                <strong>{task.label}</strong>
-                <span>{task.spec_id}</span>
+              <div class="task-main">
+                <div class="task-title-row">
+                  <div>
+                    <strong>{task.label}</strong>
+                    <span>{task.spec_id}</span>
+                  </div>
+                  <span class={`status status-${task.status.toLowerCase().replace(/_/g, "-")}`}>
+                    {displayStatus(task.status)}
+                  </span>
+                </div>
+
+                <p>{task.description}</p>
+
+                <div class="metadata-row" aria-label={`${task.label} dependencies`}>
+                  <span class="metadata-label">Dependencies</span>
+                  {#if task.depends_on.length === 0}
+                    <span class="dependency empty-dependency">None</span>
+                  {:else}
+                    {#each task.depends_on as dependency}
+                      <span class="dependency">{dependency}</span>
+                    {/each}
+                  {/if}
+                </div>
               </div>
-              <span class={`status status-${task.status.toLowerCase().replace(/_/g, "-")}`}>
-                {task.status.replace(/_/g, " ")}
-              </span>
+
+              <aside class={`launch-summary ${summary?.kind ?? "none"}`}>
+                {#if summary}
+                  <span class="launch-label">{summary.label}</span>
+                  <strong>{displayStatus(summary.launch.status)}</strong>
+                  <span class="launch-id">{summary.launch.id}</span>
+                  <span>By {summary.launch.scheduled_by}</span>
+                  {#if summary.launch.is_aborted}
+                    <span class="aborted">Aborted</span>
+                  {/if}
+                  <dl>
+                    {#each launchTiming(task) as [label, value]}
+                      <div>
+                        <dt>{label}</dt>
+                        <dd>{formatLaunchTime(value)}</dd>
+                      </div>
+                    {/each}
+                  </dl>
+                {:else}
+                  <span class="launch-label">Launch</span>
+                  <strong>None</strong>
+                  <span>No Schedule or Dispatch has created a Launch yet.</span>
+                {/if}
+              </aside>
             </li>
           {/each}
         </ul>
