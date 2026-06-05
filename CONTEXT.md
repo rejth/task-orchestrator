@@ -2,7 +2,7 @@
 
 The background-processing context for building patient reports: each report (and similar entities) runs a fixed DAG of ~80 data-processing tasks (RELOAD / EXPORT / PUSH) that the user drives on demand via API. This document is a glossary, not a spec.
 
-> Note: the ~80-task DAG topology (ids + `depends_on`) is fully defined in `src/infrastructure/fs/task_specifications.yml`, but after the stack migration all task *execution* is stubbed to a single `DemoHandler` (`src/handlers/demo.py`). Real per-task handler bodies are not yet ported.
+> Note: the ~80-task DAG topology (ids + `depends_on`) is fully defined in `apps/server/task_orchestrator/infrastructure/fs/task_specifications.yml`, but after the stack migration all task *execution* is stubbed to a single `DemoHandler` (`apps/server/task_orchestrator/handlers/demo.py`). Real per-task handler bodies are not yet ported.
 
 ## Language
 
