@@ -10,11 +10,11 @@ Add the monorepo command surface and quality gates after the server workspace ex
 
 ## Acceptance criteria
 
-- [ ] The repository has a pnpm workspace with root scripts for development, formatting, linting, type checking, testing, API generation, and full project checks.
-- [ ] Server scripts invoked through pnpm delegate to uv in the server workspace instead of replacing Python dependency management.
-- [ ] Biome and Oxlint are configured for TypeScript/Svelte/client-side checks without interfering with Python tooling.
-- [ ] Lefthook is configured with a cheaper pre-commit path and a full pre-push check path.
-- [ ] Root documentation explains the shared command surface and the division between pnpm orchestration and uv server dependency management.
+- [x] The repository has a pnpm workspace with root scripts for development, formatting, linting, type checking, testing, API generation, and full project checks.
+- [x] Server scripts invoked through pnpm delegate to uv in the server workspace instead of replacing Python dependency management.
+- [x] Biome and Oxlint are configured for TypeScript/Svelte/client-side checks without interfering with Python tooling.
+- [x] Lefthook is configured with a cheaper pre-commit path and a full pre-push check path.
+- [x] Root documentation explains the shared command surface and the division between pnpm orchestration and uv server dependency management.
 
 ## Blocked by
 
