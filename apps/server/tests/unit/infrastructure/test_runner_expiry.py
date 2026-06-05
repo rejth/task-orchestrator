@@ -32,10 +32,14 @@ def _runner_patches(mock_service: MagicMock) -> tuple[Any, ...]:
 
     return (
         patch("task_orchestrator.api.config.get_settings", return_value=mock_settings),
-        patch("task_orchestrator.infrastructure.database.session.get_session_factory", return_value=mock_session_factory),
+        patch(
+            "task_orchestrator.infrastructure.database.session.get_session_factory", return_value=mock_session_factory
+        ),
         patch("task_orchestrator.infrastructure.repositories.jobs_repo.SQLJobsRepository"),
         patch("task_orchestrator.services.tasks_management_service.TasksManagementService", return_value=mock_service),
-        patch("task_orchestrator.infrastructure.celery.runner._run_handler", return_value=(TaskHandleStatus.SUCCESS, [])),
+        patch(
+            "task_orchestrator.infrastructure.celery.runner._run_handler", return_value=(TaskHandleStatus.SUCCESS, [])
+        ),
         mock_session,
     )
 

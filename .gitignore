@@ -25,6 +25,8 @@ __pycache__/
 dump/
 
 /node_modules
+.pnpm-store/
+tsconfig.tsbuildinfo
 .env
 
 # mac finder
