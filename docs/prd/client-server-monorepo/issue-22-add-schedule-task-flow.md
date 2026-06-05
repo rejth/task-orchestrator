@@ -10,12 +10,12 @@ Add the operator flow for Scheduling a Task from the Task console. The client sh
 
 ## Acceptance criteria
 
-- [ ] Each eligible Task in the console exposes a clear Schedule action using the project's canonical Schedule term.
-- [ ] Scheduling calls the server through the generated-contract API client and validates the Schedule response.
-- [ ] The UI shows which Tasks were affected by the Schedule operation using the response returned by the server.
-- [ ] The Task list refreshes or reconciles after scheduling so the selected Scope's Job state is current.
-- [ ] Error states for unknown Task, missing Scope, authentication failure, validation failure, and dispatch-after-commit warning paths are handled clearly where observable through the API.
-- [ ] Client behavior tests or documented verification cover successful scheduling and representative failure states.
+- [x] Each eligible Task in the console exposes a clear Schedule action using the project's canonical Schedule term.
+- [x] Scheduling calls the server through the generated-contract API client and validates the Schedule response.
+- [x] The UI shows which Tasks were affected by the Schedule operation using the response returned by the server.
+- [x] The Task list refreshes or reconciles after scheduling so the selected Scope's Job state is current.
+- [x] Error states for unknown Task, missing Scope, authentication failure, validation failure, and dispatch-after-commit warning paths are handled clearly where observable through the API.
+- [x] Client behavior tests or documented verification cover successful scheduling and representative failure states.
 
 ## Blocked by
 
