@@ -20,7 +20,9 @@ def sweep_mocks():
 
     with (
         patch("task_orchestrator.infrastructure.celery.sweep_task.get_settings", return_value=mock_settings),
-        patch("task_orchestrator.infrastructure.celery.sweep_task.get_session_factory", return_value=mock_session_factory),
+        patch(
+            "task_orchestrator.infrastructure.celery.sweep_task.get_session_factory", return_value=mock_session_factory
+        ),
         patch("task_orchestrator.infrastructure.celery.sweep_task.SQLJobsRepository"),
         patch("task_orchestrator.infrastructure.celery.sweep_task.TaskDispatcher"),
         patch("task_orchestrator.infrastructure.celery.sweep_task.ReconciliationSweepService", MockService),
@@ -50,7 +52,6 @@ def test_beat_schedule_interval_matches_settings():
     app = get_celery_app()
     entry = app.conf.beat_schedule["reconciliation-sweep"]
     assert entry["schedule"] == settings.RECONCILIATION_SWEEP_INTERVAL_SECONDS
-
 
 
 def test_sweep_task_calls_service_sweep(sweep_mocks):
