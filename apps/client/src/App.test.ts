@@ -114,6 +114,92 @@ describe("operator tracer", () => {
     expect(screen.getByText(scopeId)).toBeInTheDocument();
   });
 
+  it("Schedules an eligible Task, shows affected Tasks, and refreshes the selected Scope", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+              status: "NEW",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            tasks: [
+              taskResponse({
+                spec_id: "FETCH_RAW_DATA",
+                label: "Fetch raw data",
+                description: "Fetches source data",
+                status: "PENDING",
+                current_launch: launchResponse(),
+              }),
+              taskResponse({
+                spec_id: "TRANSFORM_DATA",
+                label: "Transform data",
+                description: "Normalizes source data",
+                depends_on: ["FETCH_RAW_DATA"],
+                status: "PENDING",
+                current_launch: launchResponse("00000000-0000-4000-8000-000000000004"),
+              }),
+            ],
+          },
+          202,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+              status: "PENDING",
+              current_launch: launchResponse(),
+            }),
+            taskResponse({
+              spec_id: "TRANSFORM_DATA",
+              label: "Transform data",
+              description: "Normalizes source data",
+              depends_on: ["FETCH_RAW_DATA"],
+              status: "PENDING",
+              current_launch: launchResponse("00000000-0000-4000-8000-000000000004"),
+            }),
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+
+    expect(
+      await screen.findByText("2 Tasks were Scheduled from Fetch raw data."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Affected Tasks")).toBeInTheDocument();
+    expect(screen.getByText("Fetch raw data, Transform data")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Schedule accepted. Dispatch will continue through reconciliation if queueing is delayed after commit.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("PENDING")).toHaveLength(4);
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/schedule`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(3, `/api/scopes/${scopeId}/tasks`, expect.any(Object));
+  });
+
   it("clears the stored API key after a 401 response", async () => {
     localStorage.setItem("task-orchestrator.api-key", "expired-key");
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, 401));
@@ -122,6 +208,34 @@ describe("operator tracer", () => {
 
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The API key was rejected");
+    expect(localStorage.getItem("task-orchestrator.api-key")).toBeNull();
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+  });
+
+  it("clears the stored API key after a 401 Schedule response", async () => {
+    localStorage.setItem("task-orchestrator.api-key", "expired-key");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+              status: "NEW",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, 401));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The API key was rejected");
     expect(localStorage.getItem("task-orchestrator.api-key")).toBeNull();
@@ -140,6 +254,62 @@ describe("operator tracer", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("No Scope exists for that ID");
   });
 
+  it("shows a Schedule-specific message for a missing Scope or unknown Task", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+              status: "NEW",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ detail: "Task was not found" }, 404));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That Task or Scope was not found. Refresh the selected Scope and try again.",
+    );
+  });
+
+  it("shows a Schedule-specific message when the Task cannot be Scheduled", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+              status: "NEW",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ detail: "Invalid task status" }, 422));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That Task cannot be Scheduled in its current state.",
+    );
+  });
+
   it("shows generated-contract validation failures for invalid Task lists", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ tasks: [{ id: "not-a-uuid" }] }));
 
@@ -155,6 +325,34 @@ describe("operator tracer", () => {
     expect(
       screen.getByText("Select or initialize a Scope to load its Job Task list."),
     ).toBeInTheDocument();
+  });
+
+  it("shows generated-contract validation failures for invalid Schedule responses", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+              status: "NEW",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ tasks: [{ id: "not-a-uuid" }] }, 202));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The Schedule response from the server did not match the generated API contract.",
+    );
   });
 
   it("shows server error details when Task loading fails", async () => {
@@ -177,4 +375,32 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+function taskResponse(overrides: Record<string, unknown>) {
+  return {
+    id: "00000000-0000-4000-8000-000000000002",
+    spec_id: "FETCH_RAW_DATA",
+    label: "Fetch raw data",
+    description: "Fetches source data",
+    depends_on: [],
+    status: "NEW",
+    current_launch: null,
+    latest_launch: null,
+    ...overrides,
+  };
+}
+
+function launchResponse(id = "00000000-0000-4000-8000-000000000003") {
+  return {
+    id,
+    scheduled_at: "2026-06-05T10:00:00Z",
+    scheduled_by: "secret-key",
+    status: "PENDING",
+    started_at: null,
+    finished_at: null,
+    failed_at: null,
+    skipped_at: null,
+    is_aborted: null,
+  };
 }

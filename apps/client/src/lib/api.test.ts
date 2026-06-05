@@ -40,7 +40,17 @@ describe("api client", () => {
             depends_on: [],
             status: "NEW",
             current_launch: null,
-            latest_launch: null,
+            latest_launch: {
+              id: "00000000-0000-4000-8000-000000000003",
+              scheduled_at: "2026-06-05T16:45:52.2208",
+              scheduled_by: "secret-key",
+              status: "FINISHED",
+              started_at: "2026-06-05T16:46:10.410240",
+              finished_at: "2026-06-05T16:46:10.999060",
+              failed_at: null,
+              skipped_at: null,
+              is_aborted: null,
+            },
           },
         ],
       }),
@@ -50,6 +60,52 @@ describe("api client", () => {
     await expect(client.getTasks(scopeId)).resolves.toEqual([
       expect.objectContaining({ label: "Fetch raw data", status: "NEW" }),
     ]);
+  });
+
+  it("posts Schedule requests through the generated response contract", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(
+        {
+          tasks: [
+            {
+              id: "00000000-0000-4000-8000-000000000002",
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+              depends_on: [],
+              status: "PENDING",
+              current_launch: {
+                id: "00000000-0000-4000-8000-000000000003",
+                scheduled_at: "2026-06-05T16:53:52.956653+00:00",
+                scheduled_by: "secret-key",
+                status: "PENDING",
+                started_at: null,
+                finished_at: null,
+                failed_at: null,
+                skipped_at: null,
+                is_aborted: null,
+              },
+              latest_launch: null,
+            },
+          ],
+        },
+        202,
+      ),
+    );
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+    const result = await client.scheduleTask(scopeId, "FETCH_RAW_DATA");
+
+    expect(result).toEqual([
+      expect.objectContaining({ spec_id: "FETCH_RAW_DATA", status: "PENDING" }),
+    ]);
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/schedule`,
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-API-Key": "secret-key" }),
+      }),
+    );
   });
 
   it("normalizes response validation failures", async () => {
