@@ -14,6 +14,10 @@ _Avoid_: tenant, context, owner.
 The per-Scope instance of the full task DAG. The aggregate root that owns DAG traversal, dependency validation, state transitions, and cascade failure. Job = state machine + DAG logic; it is not the executor.
 _Avoid_: pipeline, workflow, run.
 
+**Task DAG console**:
+The operator-facing view of a Job's Task DAG used to inspect Task state and choose operational actions; it does not define or edit Task topology.
+_Avoid_: node editor, graph editor, workflow editor.
+
 **Task** (ScopedTask):
 A single node of a Job's DAG, modelled as a state machine (New -> Pending -> InProgress -> Success / Failed / Skipped).
 _Avoid_: step, stage.
@@ -47,6 +51,7 @@ Failing a Task fails its downstream Tasks, so nothing derived from a failed Task
 - A **Scope** has exactly one **Job**.
 - A **Job** has many **Tasks**; their edges come from each **TaskSpecification**'s `depends_on`.
 - A **Task** has one current **Launch** plus a history of past **Launches**.
+- The **Task DAG console** reads a **Job**'s **Tasks** and lets an operator act on existing **Tasks**.
 - A **Task** is **Ready** only when every predecessor **Task** is Success or Skipped.
 - **Schedule** selects a set of **Tasks**; **Dispatch** acts on the **Ready** subset of that set.
 
@@ -58,6 +63,8 @@ Failing a Task fails its downstream Tasks, so nothing derived from a failed Task
 > **Domain expert:** "On success the Job is asked which successors are now Ready - all predecessors Success or Skipped - and only those are Dispatched."
 > **Dev:** "And if one predecessor failed?"
 > **Domain expert:** "Then the dependent Task never becomes Ready; failure cascades down so stale or partial work never ships."
+> **Dev:** "Can the Task DAG console put a Run button on every Task node?"
+> **Domain expert:** "Use Schedule language instead, and show the downstream Tasks first; scheduling a Task is an operational action on that Task and everything derived from it."
 
 ## Reconciliation sweep
 
@@ -67,3 +74,4 @@ A Celery-beat periodic task (`reconciliation_sweep`, interval controlled by `REC
 
 - "schedule" was used to mean both "re-run this and all downstream" and "retry just this one". Resolved: **Schedule** = re-run downstream; a future **Retry** covers the single-Task case.
 - "run"/"execution"/"attempt" were used interchangeably for a Task's execution. Resolved: the canonical term is **Launch**.
+- "node editor" suggested editing Task topology. Resolved: the operator-facing surface is a **Task DAG console**; Task topology remains defined by **TaskSpecifications**.

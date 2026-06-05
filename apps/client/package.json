@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@xyflow/svelte": "1.6.0",
     "svelte": "5.56.2",
     "vite": "8.0.16",
     "zod": "4.4.3"
