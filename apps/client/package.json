@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "api:generate": "openapi-ts",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
@@ -17,6 +18,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.98.1",
     "@sveltejs/vite-plugin-svelte": "7.1.2",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/svelte": "5.3.1",

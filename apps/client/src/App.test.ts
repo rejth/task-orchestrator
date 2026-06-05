@@ -22,7 +22,7 @@ describe("operator tracer", () => {
         jsonResponse({
           tasks: [
             {
-              id: "task-1",
+              id: "00000000-0000-4000-8000-000000000002",
               spec_id: "FETCH_RAW_DATA",
               label: "Fetch raw data",
               description: "Fetches source data",

@@ -27,7 +27,7 @@
     "test": "pnpm run test:client && pnpm run test:server",
     "test:client": "pnpm --filter @task-orchestrator/client test",
     "test:server": "pnpm --filter @task-orchestrator/server test",
-    "api:generate": "pnpm --filter @task-orchestrator/server api:generate",
+    "api:generate": "pnpm --filter @task-orchestrator/server api:generate && pnpm --filter @task-orchestrator/client api:generate",
     "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run api:generate",
     "prepare": "lefthook install"
   },
