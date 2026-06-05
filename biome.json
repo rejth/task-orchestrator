@@ -10,6 +10,7 @@
       "*.json",
       "*.jsonc",
       "apps/client/**/*.{js,jsx,ts,tsx,svelte,json,jsonc,css}",
+      "!apps/client/src/lib/api-contract",
       "packages/**/*.{js,jsx,ts,tsx,svelte,json,jsonc,css}"
     ]
   },

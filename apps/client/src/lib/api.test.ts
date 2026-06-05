@@ -1,0 +1,90 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiValidationError, createApiClient } from "./api";
+
+const scopeId = "00000000-0000-4000-8000-000000000001";
+
+describe("api client", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("attaches the API key and parses successful Scope initialization", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ scope_id: scopeId }, 201));
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+    const result = await client.initializeScope(scopeId);
+
+    expect(result.scope_id).toBe(scopeId);
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/scopes/${scopeId}`,
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-API-Key": "secret-key" }),
+      }),
+    );
+  });
+
+  it("parses generated task-list contracts", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        tasks: [
+          {
+            id: "00000000-0000-4000-8000-000000000002",
+            spec_id: "FETCH_RAW_DATA",
+            label: "Fetch raw data",
+            description: "Fetches source data",
+            depends_on: [],
+            status: "NEW",
+            current_launch: null,
+            latest_launch: null,
+          },
+        ],
+      }),
+    );
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+    await expect(client.getTasks(scopeId)).resolves.toEqual([
+      expect.objectContaining({ label: "Fetch raw data", status: "NEW" }),
+    ]);
+  });
+
+  it("normalizes response validation failures", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ tasks: [{ id: "not-a-uuid" }] }));
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+
+    await expect(client.getTasks(scopeId)).rejects.toBeInstanceOf(ApiValidationError);
+  });
+
+  it("normalizes HTTP errors", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ detail: "Job was not found" }, 404));
+
+    const client = createApiClient({ apiKey: "secret-key", onUnauthorized: vi.fn() });
+
+    await expect(client.getTasks(scopeId)).rejects.toMatchObject({
+      message: "Job was not found",
+      status: 404,
+    });
+  });
+
+  it("notifies the caller before rejecting 401 responses", async () => {
+    const onUnauthorized = vi.fn();
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, 401));
+
+    const client = createApiClient({ apiKey: "expired-key", onUnauthorized });
+
+    await expect(client.getTasks(scopeId)).rejects.toMatchObject({ status: 401 });
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+  });
+});
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}

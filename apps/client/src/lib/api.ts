@@ -1,4 +1,9 @@
-import { z } from "zod";
+import type { ZodType } from "zod";
+import type { TaskSchema } from "./api-contract";
+import {
+  zGetTasksApiScopesScopeIdTasksGetResponse,
+  zInitScopeApiScopesScopeIdPostResponse,
+} from "./api-contract/zod.gen";
 
 export class ApiError extends Error {
   constructor(
@@ -10,40 +15,14 @@ export class ApiError extends Error {
   }
 }
 
-const taskStatusSchema = z.enum(["NEW", "PENDING", "IN_PROGRESS", "SUCCESS", "FAILED", "SKIPPED"]);
+export class ApiValidationError extends Error {
+  constructor(readonly cause: unknown) {
+    super("The server response did not match the expected API contract.");
+    this.name = "ApiValidationError";
+  }
+}
 
-const launchSchema = z.looseObject({
-  id: z.string(),
-  status: z.string(),
-  scheduled_at: z.string(),
-  scheduled_by: z.string().nullable().optional(),
-  started_at: z.string().optional(),
-  finished_at: z.string().optional(),
-  failed_at: z.string().optional(),
-  skipped_at: z.string().optional(),
-  is_aborted: z.boolean().optional(),
-});
-
-export const taskSchema = z.object({
-  id: z.string(),
-  spec_id: z.string(),
-  label: z.string(),
-  description: z.string(),
-  depends_on: z.array(z.string()),
-  status: taskStatusSchema,
-  current_launch: launchSchema.nullable().optional(),
-  latest_launch: launchSchema.nullable().optional(),
-});
-
-const tasksResponseSchema = z.object({
-  tasks: z.array(taskSchema),
-});
-
-const scopeResponseSchema = z.object({
-  scope_id: z.string(),
-});
-
-export type Task = z.infer<typeof taskSchema>;
+export type Task = TaskSchema;
 
 type ApiClientOptions = {
   apiKey: string;
@@ -51,7 +30,7 @@ type ApiClientOptions = {
 };
 
 export function createApiClient({ apiKey, onUnauthorized }: ApiClientOptions) {
-  async function request(path: string, init: RequestInit = {}) {
+  async function request<T>(path: string, schema: ZodType<T>, init: RequestInit = {}) {
     const response = await fetch(path, {
       ...init,
       headers: {
@@ -71,22 +50,38 @@ export function createApiClient({ apiKey, onUnauthorized }: ApiClientOptions) {
     }
 
     if (response.status === 204) {
-      return null;
+      return parseResponse(schema, undefined);
     }
 
-    return response.json();
+    return parseResponse(schema, await response.json());
   }
 
   return {
     async initializeScope(scopeId: string) {
-      const json = await request(`/api/scopes/${encodeURIComponent(scopeId)}`, { method: "POST" });
-      return scopeResponseSchema.parse(json);
+      return request(
+        `/api/scopes/${encodeURIComponent(scopeId)}`,
+        zInitScopeApiScopesScopeIdPostResponse,
+        {
+          method: "POST",
+        },
+      );
     },
     async getTasks(scopeId: string) {
-      const json = await request(`/api/scopes/${encodeURIComponent(scopeId)}/tasks`);
-      return tasksResponseSchema.parse(json).tasks;
+      const result = await request(
+        `/api/scopes/${encodeURIComponent(scopeId)}/tasks`,
+        zGetTasksApiScopesScopeIdTasksGetResponse,
+      );
+      return result.tasks;
     },
   };
+}
+
+function parseResponse<T>(schema: ZodType<T>, payload: unknown) {
+  const result = schema.safeParse(payload);
+  if (!result.success) {
+    throw new ApiValidationError(result.error);
+  }
+  return result.data;
 }
 
 async function readError(response: Response) {
