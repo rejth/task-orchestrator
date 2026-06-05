@@ -9,6 +9,8 @@ let tasks = $state<Task[]>([]);
 let errorMessage = $state("");
 let successMessage = $state("");
 let isLoading = $state(false);
+let schedulingTaskId = $state("");
+let scheduleResult = $state<Task[]>([]);
 
 const scopePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -23,6 +25,7 @@ function forgetKey() {
   apiKey = "";
   tasks = [];
   activeScopeId = "";
+  scheduleResult = [];
   successMessage = "";
   errorMessage = "The API key was cleared.";
 }
@@ -32,6 +35,7 @@ async function initializeScope() {
     const result = await client.initializeScope(cleanScopeId);
     activeScopeId = result.scope_id;
     tasks = await client.getTasks(result.scope_id);
+    scheduleResult = [];
     successMessage = `Scope ${result.scope_id} was initialized.`;
   });
 }
@@ -40,18 +44,37 @@ async function selectScope() {
   await withApi(async (client, cleanScopeId) => {
     tasks = await client.getTasks(cleanScopeId);
     activeScopeId = cleanScopeId;
+    scheduleResult = [];
     successMessage = `Scope ${cleanScopeId} is selected.`;
   });
 }
 
+async function scheduleTask(task: Task) {
+  await withApi(
+    async (client, cleanScopeId) => {
+      schedulingTaskId = task.spec_id;
+      const affectedTasks = await client.scheduleTask(cleanScopeId, task.spec_id);
+      tasks = await client.getTasks(cleanScopeId);
+      activeScopeId = cleanScopeId;
+      scheduleResult = affectedTasks;
+      successMessage = `${affectedTasks.length} ${affectedTasks.length === 1 ? "Task was" : "Tasks were"} Scheduled from ${task.label}.`;
+    },
+    {
+      explainError: explainScheduleError,
+    },
+  );
+}
+
 async function withApi(
   action: (client: ReturnType<typeof createApiClient>, cleanScopeId: string) => Promise<void>,
+  options: { explainError?: (error: unknown) => string } = {},
 ) {
   const cleanKey = saveApiKey(apiKey);
   const cleanScopeId = scopeId.trim();
 
   errorMessage = "";
   successMessage = "";
+  scheduleResult = [];
 
   if (cleanKey.length === 0) {
     errorMessage = "Enter an API key before calling the server.";
@@ -77,7 +100,7 @@ async function withApi(
   try {
     await action(client, cleanScopeId);
   } catch (error) {
-    errorMessage = explainError(error);
+    errorMessage = options.explainError?.(error) ?? explainError(error);
     if (error instanceof ApiError && error.status === 401) {
       tasks = [];
       activeScopeId = "";
@@ -88,6 +111,7 @@ async function withApi(
     }
   } finally {
     isLoading = false;
+    schedulingTaskId = "";
   }
 }
 
@@ -109,6 +133,28 @@ function explainError(error: unknown) {
   }
 
   return "The server response could not be read. Check the API is running and try again.";
+}
+
+function explainScheduleError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 404) {
+      return "That Task or Scope was not found. Refresh the selected Scope and try again.";
+    }
+
+    if (error.status === 422) {
+      return "That Task cannot be Scheduled in its current state.";
+    }
+  }
+
+  if (error instanceof ApiValidationError) {
+    return "The Schedule response from the server did not match the generated API contract.";
+  }
+
+  return explainError(error);
+}
+
+function canSchedule(task: Task) {
+  return ["NEW", "SUCCESS", "FAILED", "SKIPPED"].includes(task.status);
 }
 
 function displayStatus(status: string) {
@@ -168,6 +214,10 @@ function launchTiming(task: Task) {
     (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
   );
 }
+
+function affectedTaskLabels() {
+  return scheduleResult.map((task) => task.label).join(", ");
+}
 </script>
 
 <svelte:head>
@@ -214,6 +264,14 @@ function launchTiming(task: Task) {
 
       {#if successMessage}
         <p class="message success">{successMessage}</p>
+      {/if}
+
+      {#if scheduleResult.length > 0}
+        <div class="schedule-result" aria-live="polite">
+          <span>Affected Tasks</span>
+          <strong>{affectedTaskLabels()}</strong>
+          <p>Schedule accepted. Dispatch will continue through reconciliation if queueing is delayed after commit.</p>
+        </div>
       {/if}
     </div>
 
@@ -264,6 +322,17 @@ function launchTiming(task: Task) {
                     {/each}
                   {/if}
                 </div>
+
+                <div class="task-actions">
+                  <button
+                    type="button"
+                    class="secondary"
+                    onclick={() => scheduleTask(task)}
+                    disabled={isLoading || !canSchedule(task)}
+                  >
+                    {schedulingTaskId === task.spec_id ? "Scheduling..." : "Schedule"}
+                  </button>
+                </div>
               </div>
 
               <aside class={`launch-summary ${summary?.kind ?? "none"}`}>
@@ -296,3 +365,7 @@ function launchTiming(task: Task) {
     </div>
   </section>
 </main>
+
+<style>
+  /* Keeps Svelte/Vite dev HMR on the style-update path for this component. */
+</style>

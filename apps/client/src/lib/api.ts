@@ -1,8 +1,9 @@
-import type { ZodType } from "zod";
-import type { TaskSchema } from "./api-contract";
+import { type ZodType, z } from "zod";
+import type { TaskListResponse, TaskSchema } from "./api-contract";
 import {
-  zGetTasksApiScopesScopeIdTasksGetResponse,
   zInitScopeApiScopesScopeIdPostResponse,
+  zLaunchSchema,
+  zTaskSchema,
 } from "./api-contract/zod.gen";
 
 export class ApiError extends Error {
@@ -23,6 +24,22 @@ export class ApiValidationError extends Error {
 }
 
 export type Task = TaskSchema;
+
+const localDateTime = z.iso.datetime({ local: true, offset: true });
+const launchSchema = zLaunchSchema.extend({
+  failed_at: localDateTime.nullish(),
+  finished_at: localDateTime.nullish(),
+  scheduled_at: localDateTime,
+  skipped_at: localDateTime.nullish(),
+  started_at: localDateTime.nullish(),
+});
+const taskSchema = zTaskSchema.extend({
+  current_launch: launchSchema.nullish(),
+  latest_launch: launchSchema.nullish(),
+});
+const taskListResponseSchema = z.object({
+  tasks: z.array(taskSchema),
+}) satisfies ZodType<TaskListResponse>;
 
 type ApiClientOptions = {
   apiKey: string;
@@ -69,7 +86,17 @@ export function createApiClient({ apiKey, onUnauthorized }: ApiClientOptions) {
     async getTasks(scopeId: string) {
       const result = await request(
         `/api/scopes/${encodeURIComponent(scopeId)}/tasks`,
-        zGetTasksApiScopesScopeIdTasksGetResponse,
+        taskListResponseSchema,
+      );
+      return result.tasks;
+    },
+    async scheduleTask(scopeId: string, taskId: string) {
+      const result = await request(
+        `/api/scopes/${encodeURIComponent(scopeId)}/tasks/${encodeURIComponent(taskId)}/schedule`,
+        taskListResponseSchema,
+        {
+          method: "POST",
+        },
       );
       return result.tasks;
     },
