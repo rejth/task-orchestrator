@@ -6,7 +6,7 @@ export type TaskNodeData = {
 };
 
 export type TaskFlowNode = Node<TaskNodeData, "task">;
-export type TaskFlowEdge = Edge<Record<string, never>, "smoothstep">;
+export type TaskFlowEdge = Edge<Record<string, never>, "default">;
 
 export type MissingDependency = {
   taskId: string;
@@ -21,8 +21,8 @@ export type TaskGraph = {
   missingDependencies: MissingDependency[];
 };
 
-const COLUMN_GAP = 320;
-const ROW_GAP = 160;
+const COLUMN_GAP = 420;
+const ROW_GAP = 220;
 
 export function buildTaskGraph(tasks: Task[]): TaskGraph {
   const taskIds = new Set(tasks.map((task) => task.spec_id));
@@ -91,7 +91,7 @@ export function buildTaskGraph(tasks: Task[]): TaskGraph {
     edges: tasks.flatMap((task) =>
       (upstreamByTaskId.get(task.spec_id) ?? []).map((dependencyId) => ({
         id: `${dependencyId}->${task.spec_id}`,
-        type: "smoothstep" as const,
+        type: "default" as const,
         source: dependencyId,
         target: task.spec_id,
         ariaLabel: `${dependencyId} must finish before ${task.spec_id}`,
@@ -153,4 +153,21 @@ function calculateDependencyLayers(
 
 function stableUnique(values: string[]) {
   return Array.from(new Set(values));
+}
+
+export function collectConnectedTaskIds(taskId: string, adjacencyByTaskId: Map<string, string[]>) {
+  const connectedTaskIds = new Set<string>();
+  const queue = [...(adjacencyByTaskId.get(taskId) ?? [])];
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const connectedTaskId = queue[index];
+    if (!connectedTaskId || connectedTaskIds.has(connectedTaskId)) {
+      continue;
+    }
+
+    connectedTaskIds.add(connectedTaskId);
+    queue.push(...(adjacencyByTaskId.get(connectedTaskId) ?? []));
+  }
+
+  return connectedTaskIds;
 }
