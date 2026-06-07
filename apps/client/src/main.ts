@@ -1,3 +1,4 @@
+import "@xyflow/svelte/dist/style.css";
 import "./styles.css";
 import { mount } from "svelte";
 import App from "./App.svelte";
