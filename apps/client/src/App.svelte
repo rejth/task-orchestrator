@@ -22,6 +22,9 @@ import { buildTaskGraph, collectConnectedTaskIds, type TaskFlowEdge } from "./li
 
 type TaskViewNode = Node<TaskNodeViewData, "task">;
 
+const ACTIVE_TASK_STATUSES = new Set(["PENDING", "IN_PROGRESS"]);
+const ACTIVE_WORK_POLL_INTERVAL_MS = 5_000;
+
 let apiKey = $state(loadApiKey());
 let scopeId = $state("");
 let activeScopeId = $state("");
@@ -34,6 +37,9 @@ let stoppingRun = $state(false);
 let abortingLaunchId = $state("");
 let loadingJournalId = $state("");
 let selectedTaskId = $state("");
+let isDocumentVisible = $state(
+  typeof document === "undefined" ? true : document.visibilityState === "visible",
+);
 let selectedJournal = $state<{
   taskLabel: string;
   taskId: string;
@@ -55,8 +61,11 @@ let downstreamTaskIds = $derived(
     ? collectConnectedTaskIds(selectedTaskId, taskGraph.downstreamByTaskId)
     : new Set<string>(),
 );
+let hasActiveWork = $derived(tasks.some((task) => ACTIVE_TASK_STATUSES.has(task.status)));
 let flowNodes = $state<TaskViewNode[]>([]);
 let flowEdges = $state<TaskFlowEdge[]>([]);
+let backgroundRefreshInFlight = false;
+let automaticPollingStopped = $state(false);
 
 $effect(() => {
   flowNodes = taskGraph.nodes.map((node) => ({
@@ -88,6 +97,41 @@ $effect(() => {
   }
 });
 
+$effect(() => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const handleVisibilityChange = () => {
+    const becameVisible = document.visibilityState === "visible";
+    isDocumentVisible = becameVisible;
+
+    if (becameVisible && activeScopeId && hasActiveWork && !automaticPollingStopped) {
+      void refreshActiveScope({ preserveJournal: true, quiet: true });
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  return () => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+});
+
+$effect(() => {
+  if (!activeScopeId || !hasActiveWork || !isDocumentVisible || automaticPollingStopped) {
+    return;
+  }
+
+  const intervalId = window.setInterval(() => {
+    void refreshActiveScope({ preserveJournal: true, quiet: true });
+  }, ACTIVE_WORK_POLL_INTERVAL_MS);
+
+  return () => {
+    window.clearInterval(intervalId);
+  };
+});
+
 function storeKey() {
   apiKey = saveApiKey(apiKey);
   successMessage = apiKey.length > 0 ? "API key saved for this browser." : "";
@@ -99,6 +143,7 @@ function forgetKey() {
   apiKey = "";
   tasks = [];
   activeScopeId = "";
+  automaticPollingStopped = false;
   selectedJournal = null;
   selectedTaskId = "";
   successMessage = "";
@@ -122,6 +167,38 @@ async function selectScope() {
     selectedJournal = null;
     successMessage = `Scope ${cleanScopeId} is selected.`;
   });
+}
+
+async function refreshActiveScope(options: { preserveJournal?: boolean; quiet?: boolean } = {}) {
+  if (!activeScopeId || (options.quiet && (backgroundRefreshInFlight || isLoading))) {
+    return;
+  }
+
+  if (options.quiet) {
+    backgroundRefreshInFlight = true;
+  }
+
+  try {
+    const refreshed = await withApi(
+      async (client, cleanScopeId) => {
+        tasks = await client.getTasks(cleanScopeId);
+        activeScopeId = cleanScopeId;
+        if (!options.quiet) {
+          successMessage = `Scope ${cleanScopeId} was refreshed.`;
+        }
+      },
+      {
+        preserveJournal: options.preserveJournal,
+        quiet: options.quiet,
+        scopeIdOverride: activeScopeId,
+      },
+    );
+    if (options.quiet && !refreshed) {
+      automaticPollingStopped = true;
+    }
+  } finally {
+    backgroundRefreshInFlight = false;
+  }
 }
 
 async function scheduleTask(task: Task) {
@@ -151,6 +228,7 @@ async function stopRun() {
     },
     {
       explainError: explainRunControlError,
+      scopeIdOverride: activeScopeId || scopeId,
     },
   );
 }
@@ -195,29 +273,38 @@ async function loadJournal(task: Task, launch: Launch) {
 
 async function withApi(
   action: (client: ReturnType<typeof createApiClient>, cleanScopeId: string) => Promise<void>,
-  options: { explainError?: (error: unknown) => string; preserveJournal?: boolean } = {},
+  options: {
+    explainError?: (error: unknown) => string;
+    preserveJournal?: boolean;
+    quiet?: boolean;
+    scopeIdOverride?: string;
+  } = {},
 ) {
   const cleanKey = saveApiKey(apiKey);
-  const cleanScopeId = scopeId.trim();
+  const cleanScopeId = (options.scopeIdOverride ?? scopeId).trim();
 
-  errorMessage = "";
-  successMessage = "";
+  if (!options.quiet) {
+    errorMessage = "";
+    successMessage = "";
+  }
   if (!options.preserveJournal) {
     selectedJournal = null;
   }
 
   if (cleanKey.length === 0) {
     errorMessage = "Enter an API key before calling the server.";
-    return;
+    return false;
   }
 
   if (!scopePattern.test(cleanScopeId)) {
     errorMessage = "Enter a Scope ID as a valid UUID.";
-    return;
+    return false;
   }
 
   apiKey = cleanKey;
-  isLoading = true;
+  if (!options.quiet) {
+    isLoading = true;
+  }
 
   const client = createApiClient({
     apiKey: cleanKey,
@@ -229,6 +316,12 @@ async function withApi(
 
   try {
     await action(client, cleanScopeId);
+    if (options.quiet) {
+      errorMessage = "";
+    } else {
+      automaticPollingStopped = false;
+    }
+    return true;
   } catch (error) {
     errorMessage = options.explainError?.(error) ?? explainError(error);
     if (error instanceof ApiError && error.status === 401) {
@@ -239,8 +332,11 @@ async function withApi(
       tasks = [];
       activeScopeId = "";
     }
+    return false;
   } finally {
-    isLoading = false;
+    if (!options.quiet) {
+      isLoading = false;
+    }
     schedulingTaskId = "";
     stoppingRun = false;
     abortingLaunchId = "";
@@ -523,6 +619,9 @@ function launchTiming(launch: Launch) {
       </button>
       <button type="button" class="secondary" onclick={selectScope} disabled={isLoading}>
         Select Scope
+      </button>
+      <button type="button" class="secondary" onclick={() => refreshActiveScope()} disabled={isLoading || !activeScopeId}>
+        Refresh
       </button>
       <button type="button" class="danger" onclick={stopRun} disabled={isLoading || !activeScopeId}>
         {stoppingRun ? "Stopping..." : "Stop Run"}

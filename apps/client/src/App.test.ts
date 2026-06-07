@@ -12,6 +12,7 @@ describe("operator tracer", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -316,6 +317,225 @@ describe("operator tracer", () => {
         screen.queryByRole("complementary", { name: "Task inspector" }),
       ).not.toBeInTheDocument();
     });
+  });
+
+  it("refreshes the selected Scope from the toolbar and preserves selected Task context", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+            }),
+            taskResponse({
+              spec_id: "TRANSFORM_DATA",
+              label: "Transform data",
+              description: "Normalizes source data",
+              depends_on: ["FETCH_RAW_DATA"],
+              status: "PENDING",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+            }),
+            taskResponse({
+              spec_id: "TRANSFORM_DATA",
+              label: "Transform data",
+              description: "Normalizes source data",
+              depends_on: ["FETCH_RAW_DATA"],
+              status: "SUCCESS",
+            }),
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByTestId("task-node-TRANSFORM_DATA"));
+
+    const inspector = await screen.findByRole("complementary", { name: "Task inspector" });
+    expect(within(inspector).getByRole("heading", { name: "Transform data" })).toBeInTheDocument();
+
+    await fireEvent.input(screen.getByLabelText("Scope ID"), {
+      target: { value: "11111111-1111-4111-8111-111111111111" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByText(`Scope ${scopeId} was refreshed.`)).toBeInTheDocument();
+    expect(within(inspector).getByRole("heading", { name: "Transform data" })).toBeInTheDocument();
+    expect(within(inspector).getByText("SUCCESS")).toBeInTheDocument();
+    expect(fetch).toHaveBeenNthCalledWith(2, `/api/scopes/${scopeId}/tasks`, expect.any(Object));
+  });
+
+  it("polls while the selected Scope has active work and stops after terminal state", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "PENDING",
+              current_launch: launchResponse(),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "IN_PROGRESS",
+              current_launch: {
+                ...launchResponse(),
+                status: "IN_PROGRESS",
+                started_at: "2026-06-05T10:01:00Z",
+              },
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "SUCCESS",
+              latest_launch: {
+                ...launchResponse(),
+                status: "FINISHED",
+                started_at: "2026-06-05T10:01:00Z",
+                finished_at: "2026-06-05T10:08:00Z",
+              },
+            }),
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+
+    expect(await screen.findByText("PENDING")).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("IN_PROGRESS")).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    expect(await screen.findByText("SUCCESS")).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("pauses active-work polling while hidden and refreshes once when visible", async () => {
+    vi.useFakeTimers();
+    let visibilityState: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => visibilityState,
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "PENDING",
+              current_launch: launchResponse(),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "SUCCESS",
+              latest_launch: {
+                ...launchResponse(),
+                status: "FINISHED",
+                finished_at: "2026-06-05T10:08:00Z",
+              },
+            }),
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    expect(await screen.findByText("PENDING")).toBeInTheDocument();
+
+    visibilityState = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    visibilityState = "visible";
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("SUCCESS")).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops active-work polling after a background refresh failure", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "PENDING",
+              current_launch: launchResponse(),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ detail: "Database is unavailable" }, 500));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    expect(await screen.findByText("PENDING")).toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Database is unavailable");
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("Schedules an eligible Task and refreshes the selected Scope", async () => {
