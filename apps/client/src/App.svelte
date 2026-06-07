@@ -18,7 +18,7 @@ import {
 } from "./lib/api";
 import { clearApiKey, loadApiKey, saveApiKey } from "./lib/auth";
 import TaskNode, { type TaskNodeViewData } from "./lib/TaskNode.svelte";
-import { buildTaskGraph, type TaskFlowEdge } from "./lib/task-graph";
+import { buildTaskGraph, collectConnectedTaskIds, type TaskFlowEdge } from "./lib/task-graph";
 
 type TaskViewNode = Node<TaskNodeViewData, "task">;
 
@@ -34,6 +34,7 @@ let scheduleResult = $state<Task[]>([]);
 let stoppingRun = $state(false);
 let abortingLaunchId = $state("");
 let loadingJournalId = $state("");
+let selectedTaskId = $state("");
 let selectedJournal = $state<{
   taskLabel: string;
   taskId: string;
@@ -44,24 +45,29 @@ let selectedJournal = $state<{
 const scopePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const nodeTypes = { task: TaskNode } satisfies NodeTypes;
 let taskGraph = $derived(buildTaskGraph(tasks));
+let selectedTask = $derived(tasks.find((task) => task.spec_id === selectedTaskId));
+let upstreamTaskIds = $derived(
+  selectedTaskId
+    ? collectConnectedTaskIds(selectedTaskId, taskGraph.upstreamByTaskId)
+    : new Set<string>(),
+);
+let downstreamTaskIds = $derived(
+  selectedTaskId
+    ? collectConnectedTaskIds(selectedTaskId, taskGraph.downstreamByTaskId)
+    : new Set<string>(),
+);
 let flowNodes = $state<TaskViewNode[]>([]);
 let flowEdges = $state<TaskFlowEdge[]>([]);
 
 $effect(() => {
   flowNodes = taskGraph.nodes.map((node) => ({
     ...node,
+    class: taskNodeClass(node.id),
+    ariaLabel: taskNodeAriaLabel(node.id, node.data.task.label),
     data: {
       ...node.data,
-      abortingLaunchId,
-      canSchedule,
       displayStatus,
-      formatLaunchTime,
-      isLoading,
-      loadingJournalId,
-      onAbortLaunch: abortLaunch,
-      onLoadJournal: loadJournal,
-      onSchedule: scheduleTask,
-      schedulingTaskId,
+      selectionRole: taskSelectionRole(node.id),
     },
     domAttributes: {
       "data-testid": `task-node-${node.id}`,
@@ -69,10 +75,18 @@ $effect(() => {
   }));
   flowEdges = taskGraph.edges.map((edge) => ({
     ...edge,
+    class: edgeClass(edge),
     markerEnd: {
       type: MarkerType.ArrowClosed,
     },
   }));
+});
+
+$effect(() => {
+  if (selectedTaskId && !tasks.some((task) => task.spec_id === selectedTaskId)) {
+    selectedTaskId = "";
+    selectedJournal = null;
+  }
 });
 
 function storeKey() {
@@ -88,6 +102,7 @@ function forgetKey() {
   activeScopeId = "";
   scheduleResult = [];
   selectedJournal = null;
+  selectedTaskId = "";
   successMessage = "";
   errorMessage = "The API key was cleared.";
 }
@@ -167,6 +182,7 @@ async function loadJournal(task: Task, launch: Launch) {
       loadingJournalId = launch.id;
       const result = await client.getJournal(cleanScopeId, task.spec_id, launch.id);
       activeScopeId = cleanScopeId;
+      selectedTaskId = task.spec_id;
       selectedJournal = {
         taskLabel: task.label,
         taskId: task.spec_id,
@@ -357,6 +373,135 @@ function missingDependencySummary() {
     .map(({ taskId, dependencyId }) => `${taskId} depends on ${dependencyId}`)
     .join("; ");
 }
+
+function selectTask({ node }: { node: TaskViewNode }) {
+  if (node.id !== selectedTaskId) {
+    selectedJournal = null;
+  }
+  selectedTaskId = node.id;
+}
+
+function taskSelectionRole(taskId: string): TaskNodeViewData["selectionRole"] {
+  if (!selectedTaskId) {
+    return "neutral";
+  }
+
+  if (taskId === selectedTaskId) {
+    return "selected";
+  }
+
+  if (upstreamTaskIds.has(taskId)) {
+    return "upstream";
+  }
+
+  if (downstreamTaskIds.has(taskId)) {
+    return "downstream";
+  }
+
+  return "neutral";
+}
+
+function taskSelectionLabel(taskId: string) {
+  const role = taskSelectionRole(taskId);
+
+  if (role === "selected") {
+    return "Selected";
+  }
+
+  if (role === "upstream") {
+    return "Upstream";
+  }
+
+  if (role === "downstream") {
+    return "Downstream";
+  }
+
+  return "";
+}
+
+function taskNodeClass(taskId: string) {
+  const role = taskSelectionRole(taskId);
+  if (role !== "neutral") {
+    return `task-flow-node task-flow-node-${role}`;
+  }
+
+  return selectedTaskId ? "task-flow-node task-flow-node-muted" : "task-flow-node";
+}
+
+function taskNodeAriaLabel(taskId: string, label: string) {
+  const selectionLabel = taskSelectionLabel(taskId);
+  return selectionLabel ? `${label} Task, ${selectionLabel}` : `${label} Task`;
+}
+
+function edgeClass(edge: TaskFlowEdge) {
+  if (!selectedTaskId) {
+    return "task-flow-edge";
+  }
+
+  const isUpstreamEdge =
+    (edge.target === selectedTaskId || upstreamTaskIds.has(edge.target)) &&
+    upstreamTaskIds.has(edge.source);
+  const isDownstreamEdge =
+    (edge.source === selectedTaskId || downstreamTaskIds.has(edge.source)) &&
+    downstreamTaskIds.has(edge.target);
+
+  if (isUpstreamEdge) {
+    return "task-flow-edge task-flow-edge-upstream";
+  }
+
+  if (isDownstreamEdge) {
+    return "task-flow-edge task-flow-edge-downstream";
+  }
+
+  return "task-flow-edge task-flow-edge-muted";
+}
+
+function taskById(taskId: string) {
+  return tasks.find((task) => task.spec_id === taskId);
+}
+
+function taskListItems(taskIds: string[]) {
+  return taskIds
+    .map((taskId) => taskById(taskId))
+    .filter((task): task is Task => task !== undefined);
+}
+
+function downstreamImpactTasks() {
+  return taskListItems(Array.from(downstreamTaskIds));
+}
+
+function taskLaunchSummary(task: Task) {
+  if (task.current_launch) {
+    return {
+      label: "Current launch",
+      kind: "active",
+      launch: task.current_launch,
+    };
+  }
+
+  if (task.latest_launch) {
+    return {
+      label: "Latest launch",
+      kind: "terminal",
+      launch: task.latest_launch,
+    };
+  }
+
+  return undefined;
+}
+
+function launchTiming(launch: Launch) {
+  return [
+    ["Scheduled", launch.scheduled_at],
+    ["Started", launch.started_at],
+    ["Finished", launch.finished_at],
+    ["Failed", launch.failed_at],
+    ["Skipped", launch.skipped_at],
+  ].filter(
+    (entry): entry is [string, JournalEntry["timestamp"]] =>
+      typeof entry[1] === "string" && entry[1].length > 0,
+  );
+}
 </script>
 
 <svelte:head>
@@ -438,55 +583,202 @@ function missingDependencySummary() {
           {/if}
         </div>
       {:else}
-        <div class="task-graph" aria-label="Task DAG">
-          <SvelteFlow
-            bind:nodes={flowNodes}
-            bind:edges={flowEdges}
-            {nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.22 }}
-            nodesConnectable={false}
-            deleteKey={null}
-            panOnScroll
-            minZoom={0.35}
-            maxZoom={1.4}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
-            <Controls />
-          </SvelteFlow>
-        </div>
-      {/if}
-
-      {#if selectedJournal}
-        <section class="journal-panel" aria-label="Launch Journal">
-          <div class="journal-heading">
-            <div class="journal-title">
-              <span>Launch Journal</span>
-              <strong>{selectedJournal.taskLabel}</strong>
-              <small>{selectedJournal.taskId} / {selectedJournal.launch.id}</small>
-            </div>
-            <button type="button" class="ghost" onclick={() => (selectedJournal = null)}>
-              Close
-            </button>
+        <div class="task-console">
+          <div class="task-graph" aria-label="Task DAG">
+            <SvelteFlow
+              bind:nodes={flowNodes}
+              bind:edges={flowEdges}
+              {nodeTypes}
+              fitView
+              fitViewOptions={{ padding: 0.22 }}
+              nodesConnectable={false}
+              deleteKey={null}
+              panOnScroll
+              minZoom={0.35}
+              maxZoom={1.4}
+              onnodeclick={selectTask}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+              <Controls />
+            </SvelteFlow>
           </div>
 
-          {#if selectedJournal.entries.length === 0}
-            <p class="journal-empty">This Launch does not have Journal entries yet.</p>
-          {:else}
-            <ol class="journal-entries">
-              {#each selectedJournal.entries as entry}
-                <li>
-                  <div class="journal-entry-heading">
-                    <strong>{entry.level}</strong>
-                    <span>{entry.type}</span>
-                    <time datetime={entry.timestamp}>{formatLaunchTime(entry.timestamp)}</time>
+          {#if selectedTask}
+            {@const directDependencies = taskListItems(taskGraph.upstreamByTaskId.get(selectedTask.spec_id) ?? [])}
+            {@const directDependents = taskListItems(taskGraph.downstreamByTaskId.get(selectedTask.spec_id) ?? [])}
+            {@const impactTasks = downstreamImpactTasks()}
+            {@const selectedLaunchSummary = taskLaunchSummary(selectedTask)}
+            {@const selectedJournalForTask = selectedJournal?.taskId === selectedTask.spec_id ? selectedJournal : null}
+            <aside class="task-inspector" aria-label="Task inspector">
+              <div class="inspector-heading">
+                <div>
+                  <p class="eyebrow">Task inspector</p>
+                  <h3>{selectedTask.label}</h3>
+                </div>
+                <button type="button" class="ghost" onclick={() => (selectedTaskId = "")}>Close</button>
+              </div>
+
+              <span class={`status status-${selectedTask.status.toLowerCase().replace(/_/g, "-")}`}>
+                {displayStatus(selectedTask.status)}
+              </span>
+
+              <dl class="inspector-details">
+                <div>
+                  <dt>Specification ID</dt>
+                  <dd>{selectedTask.spec_id}</dd>
+                </div>
+                <div>
+                  <dt>Task ID</dt>
+                  <dd>{selectedTask.id}</dd>
+                </div>
+                <div>
+                  <dt>Description</dt>
+                  <dd>{selectedTask.description}</dd>
+                </div>
+              </dl>
+
+              <section class="inspector-section task-action-section" aria-label="Task actions">
+                <h4>Task actions</h4>
+                <div class="inspector-actions">
+                  <button
+                    type="button"
+                    class="secondary"
+                    onclick={() => scheduleTask(selectedTask)}
+                    disabled={isLoading || !canSchedule(selectedTask)}
+                  >
+                    {schedulingTaskId === selectedTask.spec_id ? "Scheduling..." : "Schedule"}
+                  </button>
+                  {#if selectedLaunchSummary}
+                    <button
+                      type="button"
+                      class="ghost"
+                      onclick={() => loadJournal(selectedTask, selectedLaunchSummary.launch)}
+                      disabled={isLoading}
+                    >
+                      {loadingJournalId === selectedLaunchSummary.launch.id ? "Loading Journal..." : "Open Journal"}
+                    </button>
+                  {/if}
+                  {#if selectedTask.current_launch}
+                    {@const currentLaunch = selectedTask.current_launch}
+                    <button
+                      type="button"
+                      class="danger"
+                      onclick={() => abortLaunch(selectedTask, currentLaunch)}
+                      disabled={isLoading}
+                    >
+                      {abortingLaunchId === currentLaunch.id ? "Aborting..." : "Abort Launch"}
+                    </button>
+                  {/if}
+                </div>
+              </section>
+
+              <section class={`launch-summary ${selectedLaunchSummary?.kind ?? "none"}`} aria-label="Launch summary">
+                {#if selectedLaunchSummary}
+                  <span class="launch-label">{selectedLaunchSummary.label}</span>
+                  <strong>{displayStatus(selectedLaunchSummary.launch.status)}</strong>
+                  <span class="launch-id">{selectedLaunchSummary.launch.id}</span>
+                  {#if selectedLaunchSummary.launch.is_aborted}
+                    <span class="aborted">Aborted</span>
+                  {/if}
+                  <dl>
+                    {#each launchTiming(selectedLaunchSummary.launch) as [label, value]}
+                      <div>
+                        <dt>{label}</dt>
+                        <dd>{formatLaunchTime(value)}</dd>
+                      </div>
+                    {/each}
+                  </dl>
+                {:else}
+                  <span class="launch-label">Launch</span>
+                  <strong>None</strong>
+                  <span>No Schedule or Dispatch has created a Launch yet.</span>
+                {/if}
+              </section>
+
+              <section class="inspector-section" aria-label="Direct dependencies">
+                <h4>Direct dependencies</h4>
+                {#if directDependencies.length === 0}
+                  <p>None</p>
+                {:else}
+                  <ul>
+                    {#each directDependencies as task}
+                      <li>
+                        <strong>{task.label}</strong>
+                        <span>{task.spec_id}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </section>
+
+              <section class="inspector-section" aria-label="Direct dependents">
+                <h4>Direct dependents</h4>
+                {#if directDependents.length === 0}
+                  <p>None</p>
+                {:else}
+                  <ul>
+                    {#each directDependents as task}
+                      <li>
+                        <strong>{task.label}</strong>
+                        <span>{task.spec_id}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </section>
+
+              <section class="inspector-section" aria-label="Downstream impact">
+                <h4>Downstream impact</h4>
+                <p>{impactTasks.length} {impactTasks.length === 1 ? "Task" : "Tasks"}</p>
+                {#if impactTasks.length > 0}
+                  <ul>
+                    {#each impactTasks as task}
+                      <li>
+                        <strong>{task.label}</strong>
+                        <span>{task.spec_id}</span>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </section>
+
+              {#if selectedJournalForTask}
+                <section class="journal-panel" aria-label="Launch Journal">
+                  <div class="journal-heading">
+                    <div class="journal-title">
+                      <span>Launch Journal</span>
+                      <strong>{selectedJournalForTask.taskLabel}</strong>
+                    </div>
+                    <button type="button" class="ghost" onclick={() => (selectedJournal = null)}>
+                      Close
+                    </button>
                   </div>
-                  <p>{entry.message}</p>
-                </li>
-              {/each}
-            </ol>
+                  <div class="journal-meta">
+                    <span>{selectedJournalForTask.taskId}</span>
+                    <span>{selectedJournalForTask.launch.id}</span>
+                  </div>
+
+                  {#if selectedJournalForTask.entries.length === 0}
+                    <p class="journal-empty">This Launch does not have Journal entries yet.</p>
+                  {:else}
+                    <ol class="journal-entries">
+                      {#each selectedJournalForTask.entries as entry}
+                        <li>
+                          <div class="journal-entry-heading">
+                            <strong>{entry.level}</strong>
+                            <span>{entry.type}</span>
+                            <time datetime={entry.timestamp}>{formatLaunchTime(entry.timestamp)}</time>
+                          </div>
+                          <p>{entry.message}</p>
+                        </li>
+                      {/each}
+                    </ol>
+                  {/if}
+                </section>
+              {/if}
+            </aside>
           {/if}
-        </section>
+        </div>
       {/if}
     </div>
   </section>
