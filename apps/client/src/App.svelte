@@ -30,7 +30,6 @@ let errorMessage = $state("");
 let successMessage = $state("");
 let isLoading = $state(false);
 let schedulingTaskId = $state("");
-let scheduleResult = $state<Task[]>([]);
 let stoppingRun = $state(false);
 let abortingLaunchId = $state("");
 let loadingJournalId = $state("");
@@ -100,7 +99,6 @@ function forgetKey() {
   apiKey = "";
   tasks = [];
   activeScopeId = "";
-  scheduleResult = [];
   selectedJournal = null;
   selectedTaskId = "";
   successMessage = "";
@@ -112,7 +110,6 @@ async function initializeScope() {
     const result = await client.initializeScope(cleanScopeId);
     activeScopeId = result.scope_id;
     tasks = await client.getTasks(result.scope_id);
-    scheduleResult = [];
     selectedJournal = null;
     successMessage = `Scope ${result.scope_id} was initialized.`;
   });
@@ -122,7 +119,6 @@ async function selectScope() {
   await withApi(async (client, cleanScopeId) => {
     tasks = await client.getTasks(cleanScopeId);
     activeScopeId = cleanScopeId;
-    scheduleResult = [];
     selectedJournal = null;
     successMessage = `Scope ${cleanScopeId} is selected.`;
   });
@@ -135,7 +131,6 @@ async function scheduleTask(task: Task) {
       const affectedTasks = await client.scheduleTask(cleanScopeId, task.spec_id);
       tasks = await client.getTasks(cleanScopeId);
       activeScopeId = cleanScopeId;
-      scheduleResult = affectedTasks;
       successMessage = `${affectedTasks.length} ${affectedTasks.length === 1 ? "Task was" : "Tasks were"} Scheduled from ${task.label}.`;
     },
     {
@@ -207,7 +202,6 @@ async function withApi(
 
   errorMessage = "";
   successMessage = "";
-  scheduleResult = [];
   if (!options.preserveJournal) {
     selectedJournal = null;
   }
@@ -362,10 +356,6 @@ function formatLaunchTime(value: string | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
-}
-
-function affectedTaskLabels() {
-  return scheduleResult.map((task) => task.label).join(", ");
 }
 
 function missingDependencySummary() {
@@ -553,14 +543,6 @@ function launchTiming(launch: Launch) {
       <p class="message warning" role="status">
         Missing dependency endpoints: {missingDependencySummary()}
       </p>
-    {/if}
-
-    {#if scheduleResult.length > 0}
-      <div class="schedule-result" aria-live="polite">
-        <span>Affected Tasks</span>
-        <strong>{affectedTaskLabels()}</strong>
-        <p>Schedule accepted. Dispatch will continue through reconciliation if queueing is delayed after commit.</p>
-      </div>
     {/if}
 
     <div class="task-panel">
