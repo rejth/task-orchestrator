@@ -84,6 +84,8 @@ describe("operator tracer", () => {
 
     expect(await screen.findByText("Fetch raw data")).toBeInTheDocument();
     expect(screen.getByTestId("svelte-flow__wrapper")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /fit view/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset layout" })).toBeInTheDocument();
     expect(screen.getAllByTestId(/^task-node-/)).toHaveLength(3);
     expect(screen.getByTestId("task-node-FETCH_RAW_DATA")).toBeInTheDocument();
     expect(screen.getByTestId("task-node-TRANSFORM_DATA")).toBeInTheDocument();
@@ -95,6 +97,7 @@ describe("operator tracer", () => {
     expect(screen.queryByText("Current launch")).not.toBeInTheDocument();
     expect(screen.queryByText("Latest launch")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open Journal" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Svelte Flow")).not.toBeInTheDocument();
     expect(screen.getByText("IN_PROGRESS")).toBeInTheDocument();
     expect(localStorage.getItem("task-orchestrator.api-key")).toBe("secret-key");
     expect(fetch).toHaveBeenCalledWith(
@@ -237,6 +240,12 @@ describe("operator tracer", () => {
     expect(screen.queryByText("Selected")).not.toBeInTheDocument();
     expect(screen.queryByText("Upstream")).not.toBeInTheDocument();
     expect(screen.queryByText("Downstream")).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Reset layout" }));
+
+    expect(screen.getByTestId("task-node-TRANSFORM_DATA")).toHaveClass("task-flow-node-selected");
+    expect(screen.getByTestId("task-node-FETCH_RAW_DATA")).toHaveClass("task-flow-node-upstream");
+    expect(screen.getByTestId("task-node-LOAD_RESULTS")).toHaveClass("task-flow-node-downstream");
   });
 
   it("preserves or clears Task selection when refreshed data changes", async () => {

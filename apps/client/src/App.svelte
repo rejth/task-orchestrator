@@ -6,6 +6,7 @@ import {
   MarkerType,
   type Node,
   type NodeTypes,
+  Panel,
   SvelteFlow,
 } from "@xyflow/svelte";
 import {
@@ -24,6 +25,7 @@ type TaskViewNode = Node<TaskNodeViewData, "task">;
 
 const ACTIVE_TASK_STATUSES = new Set(["PENDING", "IN_PROGRESS"]);
 const ACTIVE_WORK_POLL_INTERVAL_MS = 5_000;
+const TASK_GRAPH_FIT_VIEW_OPTIONS = { padding: 0.22 };
 
 let apiKey = $state(loadApiKey());
 let scopeId = $state("");
@@ -68,6 +70,10 @@ let backgroundRefreshInFlight = false;
 let automaticPollingStopped = $state(false);
 
 $effect(() => {
+  resetGraphLayout();
+});
+
+function resetGraphLayout() {
   flowNodes = taskGraph.nodes.map((node) => ({
     ...node,
     class: taskNodeClass(node.id),
@@ -86,9 +92,10 @@ $effect(() => {
     class: edgeClass(edge),
     markerEnd: {
       type: MarkerType.ArrowClosed,
+      color: edgeColor(edge),
     },
   }));
-});
+}
 
 $effect(() => {
   if (selectedTaskId && !tasks.some((task) => task.spec_id === selectedTaskId)) {
@@ -542,6 +549,24 @@ function edgeClass(edge: TaskFlowEdge) {
   return "task-flow-edge task-flow-edge-muted";
 }
 
+function edgeColor(edge: TaskFlowEdge) {
+  const edgeRole = edgeClass(edge);
+
+  if (edgeRole.includes("task-flow-edge-upstream")) {
+    return "#d6aa30";
+  }
+
+  if (edgeRole.includes("task-flow-edge-downstream")) {
+    return "#08717c";
+  }
+
+  if (edgeRole.includes("task-flow-edge-muted")) {
+    return "#b9c4c8";
+  }
+
+  return "#7a8b93";
+}
+
 function taskById(taskId: string) {
   return tasks.find((task) => task.spec_id === taskId);
 }
@@ -644,13 +669,18 @@ function launchTiming(launch: Launch) {
       </p>
     {/if}
 
-    <div class="task-panel">
+    <div class="task-panel" aria-busy={isLoading}>
       <div class="panel-heading">
         <div>
           <p class="eyebrow">Selected Scope</p>
           <h2>{activeScopeId || "None"}</h2>
         </div>
-        <span class="count">{tasks.length} tasks</span>
+        <div class="panel-badges">
+          {#if isLoading}
+            <span class="count loading">Loading</span>
+          {/if}
+          <span class="count">{tasks.length} tasks</span>
+        </div>
       </div>
 
       {#if tasks.length === 0}
@@ -664,23 +694,28 @@ function launchTiming(launch: Launch) {
           {/if}
         </div>
       {:else}
-        <div class="task-console">
+        <div class={`task-console ${selectedTask ? "task-console-with-inspector" : "task-console-graph-only"}`}>
           <div class="task-graph" aria-label="Task DAG">
             <SvelteFlow
               bind:nodes={flowNodes}
               bind:edges={flowEdges}
               {nodeTypes}
               fitView
-              fitViewOptions={{ padding: 0.22 }}
+              fitViewOptions={TASK_GRAPH_FIT_VIEW_OPTIONS}
               nodesConnectable={false}
+              nodesDraggable={true}
               deleteKey={null}
               panOnScroll
               minZoom={0.35}
               maxZoom={1.4}
+              proOptions={{ hideAttribution: true }}
               onnodeclick={selectTask}
             >
               <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
-              <Controls />
+              <Controls fitViewOptions={TASK_GRAPH_FIT_VIEW_OPTIONS} />
+              <Panel position="top-right" class="graph-panel">
+                <button type="button" class="ghost compact" onclick={resetGraphLayout}>Reset layout</button>
+              </Panel>
             </SvelteFlow>
           </div>
 
