@@ -508,6 +508,62 @@ describe("operator tracer", () => {
     );
   });
 
+  it("distinguishes current and latest Launch actions in the inspector", async () => {
+    const currentLaunchId = "00000000-0000-4000-8000-000000000003";
+    const latestLaunchId = "00000000-0000-4000-8000-000000000004";
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        tasks: [
+          taskResponse({
+            spec_id: "FETCH_RAW_DATA",
+            label: "Fetch raw data",
+            status: "PENDING",
+            current_launch: launchResponse(currentLaunchId),
+          }),
+          taskResponse({
+            spec_id: "LOAD_RESULTS",
+            label: "Load results",
+            description: "Persists transformed data",
+            depends_on: ["FETCH_RAW_DATA"],
+            status: "SUCCESS",
+            latest_launch: {
+              ...launchResponse(latestLaunchId),
+              status: "FINISHED",
+              finished_at: "2026-06-05T10:08:00Z",
+            },
+          }),
+        ],
+      }),
+    );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    const inspector = await openTaskInspector("FETCH_RAW_DATA");
+
+    const currentLaunchSummary = within(inspector).getByRole("region", {
+      name: "Launch summary",
+    });
+    expect(within(currentLaunchSummary).getByText("Current launch")).toBeInTheDocument();
+    expect(within(currentLaunchSummary).getByText(currentLaunchId)).toBeInTheDocument();
+    expect(within(inspector).getByRole("button", { name: "Abort Launch" })).toBeInTheDocument();
+    expect(within(inspector).getByRole("button", { name: "Open Journal" })).toBeInTheDocument();
+
+    await fireEvent.click(await screen.findByTestId("task-node-LOAD_RESULTS"));
+
+    const latestLaunchSummary = within(inspector).getByRole("region", {
+      name: "Launch summary",
+    });
+    expect(within(latestLaunchSummary).getByText("Latest launch")).toBeInTheDocument();
+    expect(within(latestLaunchSummary).getByText(latestLaunchId)).toBeInTheDocument();
+    expect(
+      within(inspector).queryByRole("button", { name: "Abort Launch" }),
+    ).not.toBeInTheDocument();
+    expect(within(inspector).getByRole("button", { name: "Open Journal" })).toBeInTheDocument();
+  });
+
   it("loads and displays a Launch Journal", async () => {
     const launchId = "00000000-0000-4000-8000-000000000003";
     vi.mocked(fetch)
@@ -595,6 +651,64 @@ describe("operator tracer", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
     const inspector = await openTaskInspector();
     await fireEvent.click(within(inspector).getByRole("button", { name: "Schedule" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The API key was rejected");
+    expect(localStorage.getItem("task-orchestrator.api-key")).toBeNull();
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+  });
+
+  it("clears the stored API key after a 401 Abort Launch response", async () => {
+    localStorage.setItem("task-orchestrator.api-key", "expired-key");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "PENDING",
+              current_launch: launchResponse(),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, 401));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Abort Launch" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The API key was rejected");
+    expect(localStorage.getItem("task-orchestrator.api-key")).toBeNull();
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+  });
+
+  it("clears the stored API key after a 401 Journal response", async () => {
+    localStorage.setItem("task-orchestrator.api-key", "expired-key");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              status: "SUCCESS",
+              latest_launch: { ...launchResponse(), status: "FINISHED" },
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, 401));
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Open Journal" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The API key was rejected");
     expect(localStorage.getItem("task-orchestrator.api-key")).toBeNull();
