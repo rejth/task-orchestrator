@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
 
@@ -88,12 +88,13 @@ describe("operator tracer", () => {
     expect(screen.getByTestId("task-node-TRANSFORM_DATA")).toBeInTheDocument();
     expect(screen.getByTestId("task-node-LOAD_RESULTS")).toBeInTheDocument();
     expect(screen.getByText("Fetches source data")).toBeInTheDocument();
-    expect(screen.getAllByText("None")).toHaveLength(2);
     expect(screen.getByText("Transform data")).toBeInTheDocument();
-    expect(screen.getAllByText("TRANSFORM_DATA")).toHaveLength(2);
-    expect(screen.getByText("Current Launch")).toBeInTheDocument();
-    expect(screen.getByText("Latest Launch")).toBeInTheDocument();
-    expect(screen.getAllByText("IN_PROGRESS")).toHaveLength(2);
+    expect(screen.getByText("TRANSFORM_DATA")).toBeInTheDocument();
+    expect(screen.queryByText("Dependencies")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current launch")).not.toBeInTheDocument();
+    expect(screen.queryByText("Latest launch")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Journal" })).not.toBeInTheDocument();
+    expect(screen.getByText("IN_PROGRESS")).toBeInTheDocument();
     expect(localStorage.getItem("task-orchestrator.api-key")).toBe("secret-key");
     expect(fetch).toHaveBeenCalledWith(
       `/api/scopes/${scopeId}`,
@@ -155,6 +156,166 @@ describe("operator tracer", () => {
     expect(screen.getAllByTestId(/^task-node-/)).toHaveLength(2);
     expect(screen.queryByTestId("task-node-FETCH_RAW_DATA")).not.toBeInTheDocument();
     expect(screen.queryByTestId("task-node-UNKNOWN_EXPORT")).not.toBeInTheDocument();
+  });
+
+  it("selects a Task node, highlights its graph context, and opens the inspector", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        tasks: [
+          taskResponse({
+            spec_id: "EXTRACT_SOURCE",
+            label: "Extract source",
+            description: "Reads source files",
+          }),
+          taskResponse({
+            spec_id: "FETCH_RAW_DATA",
+            label: "Fetch raw data",
+            description: "Fetches source data",
+            depends_on: ["EXTRACT_SOURCE"],
+          }),
+          taskResponse({
+            spec_id: "TRANSFORM_DATA",
+            label: "Transform data",
+            description: "Normalizes source data",
+            depends_on: ["FETCH_RAW_DATA"],
+            status: "IN_PROGRESS",
+          }),
+          taskResponse({
+            spec_id: "LOAD_RESULTS",
+            label: "Load results",
+            description: "Persists transformed data",
+            depends_on: ["TRANSFORM_DATA"],
+          }),
+          taskResponse({
+            spec_id: "NOTIFY_READY",
+            label: "Notify ready",
+            description: "Notifies downstream consumers",
+            depends_on: ["LOAD_RESULTS"],
+          }),
+          taskResponse({
+            spec_id: "ARCHIVE_UNUSED",
+            label: "Archive unused",
+            description: "Unrelated archival Task",
+          }),
+        ],
+      }),
+    );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByTestId("task-node-TRANSFORM_DATA"));
+
+    const inspector = await screen.findByRole("complementary", { name: "Task inspector" });
+    expect(within(inspector).getByRole("heading", { name: "Transform data" })).toBeInTheDocument();
+    expect(within(inspector).getByText("IN_PROGRESS")).toBeInTheDocument();
+    expect(within(inspector).getByText("Normalizes source data")).toBeInTheDocument();
+    expect(within(inspector).getByText("TRANSFORM_DATA")).toBeInTheDocument();
+
+    const dependencies = within(inspector).getByRole("region", { name: "Direct dependencies" });
+    expect(within(dependencies).getByText("Fetch raw data")).toBeInTheDocument();
+    expect(within(dependencies).getByText("FETCH_RAW_DATA")).toBeInTheDocument();
+
+    const dependents = within(inspector).getByRole("region", { name: "Direct dependents" });
+    expect(within(dependents).getByText("Load results")).toBeInTheDocument();
+    expect(within(dependents).getByText("LOAD_RESULTS")).toBeInTheDocument();
+
+    const impact = within(inspector).getByRole("region", { name: "Downstream impact" });
+    expect(within(impact).getByText("2 Tasks")).toBeInTheDocument();
+    expect(within(impact).getByText("Load results")).toBeInTheDocument();
+    expect(within(impact).getByText("Notify ready")).toBeInTheDocument();
+
+    expect(screen.getByTestId("task-node-TRANSFORM_DATA")).toHaveClass("task-flow-node-selected");
+    expect(screen.getByTestId("task-node-FETCH_RAW_DATA")).toHaveClass("task-flow-node-upstream");
+    expect(screen.getByTestId("task-node-EXTRACT_SOURCE")).toHaveClass("task-flow-node-upstream");
+    expect(screen.getByTestId("task-node-LOAD_RESULTS")).toHaveClass("task-flow-node-downstream");
+    expect(screen.getByTestId("task-node-NOTIFY_READY")).toHaveClass("task-flow-node-downstream");
+    expect(screen.getByTestId("task-node-ARCHIVE_UNUSED")).toHaveClass("task-flow-node-muted");
+    expect(screen.queryByText("Selected")).not.toBeInTheDocument();
+    expect(screen.queryByText("Upstream")).not.toBeInTheDocument();
+    expect(screen.queryByText("Downstream")).not.toBeInTheDocument();
+  });
+
+  it("preserves or clears Task selection when refreshed data changes", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+            }),
+            taskResponse({
+              spec_id: "TRANSFORM_DATA",
+              label: "Transform data",
+              description: "Normalizes source data",
+              depends_on: ["FETCH_RAW_DATA"],
+              status: "IN_PROGRESS",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+            }),
+            taskResponse({
+              spec_id: "TRANSFORM_DATA",
+              label: "Transform data",
+              description: "Normalizes source data",
+              depends_on: ["FETCH_RAW_DATA"],
+              status: "FAILED",
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({
+              spec_id: "FETCH_RAW_DATA",
+              label: "Fetch raw data",
+              description: "Fetches source data",
+            }),
+          ],
+        }),
+      );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+    await fireEvent.click(await screen.findByTestId("task-node-TRANSFORM_DATA"));
+
+    expect(
+      await screen.findByRole("complementary", { name: "Task inspector" }),
+    ).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+
+    const refreshedInspector = await screen.findByRole("complementary", { name: "Task inspector" });
+    expect(
+      within(refreshedInspector).getByRole("heading", { name: "Transform data" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(refreshedInspector).getByText("FAILED")).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("complementary", { name: "Task inspector" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("Schedules an eligible Task, shows affected Tasks, and refreshes the selected Scope", async () => {
@@ -222,7 +383,8 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Schedule" }));
 
     expect(
       await screen.findByText("2 Tasks were Scheduled from Fetch raw data."),
@@ -284,8 +446,7 @@ describe("operator tracer", () => {
     await fireEvent.click(await screen.findByRole("button", { name: "Stop Run" }));
 
     expect(await screen.findByText(`Run for Scope ${scopeId} was stopped.`)).toBeInTheDocument();
-    expect(screen.getAllByText("FAILED")).toHaveLength(2);
-    expect(screen.getByText("Aborted")).toBeInTheDocument();
+    expect(screen.getByText("FAILED")).toBeInTheDocument();
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       `/api/scopes/${scopeId}/run`,
@@ -332,12 +493,14 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Abort Launch" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Abort Launch" }));
 
     expect(
       await screen.findByText(`Launch ${launchId} for Fetch raw data was aborted.`),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("FAILED")).toHaveLength(2);
+    expect(within(inspector).getAllByText("FAILED").length).toBeGreaterThan(0);
+    expect(within(inspector).getByText("Aborted")).toBeInTheDocument();
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/launches/${launchId}`,
@@ -379,12 +542,15 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Open Journal" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Open Journal" }));
 
-    expect(await screen.findByText("Launch Journal")).toBeInTheDocument();
-    expect(screen.getByText("Handler started")).toBeInTheDocument();
-    expect(screen.getByText("INFO")).toBeInTheDocument();
-    expect(screen.getByText("UNCLASSIFIED")).toBeInTheDocument();
+    const journal = await within(inspector).findByRole("region", { name: "Launch Journal" });
+    expect(within(journal).getByText("FETCH_RAW_DATA")).toBeInTheDocument();
+    expect(within(journal).getByText(launchId)).toBeInTheDocument();
+    expect(within(journal).getByText("Handler started")).toBeInTheDocument();
+    expect(within(journal).getByText("INFO")).toBeInTheDocument();
+    expect(within(journal).getByText("UNCLASSIFIED")).toBeInTheDocument();
     expect(fetch).toHaveBeenNthCalledWith(
       2,
       `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/launches/${launchId}/journal`,
@@ -427,7 +593,8 @@ describe("operator tracer", () => {
 
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Schedule" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The API key was rejected");
     expect(localStorage.getItem("task-orchestrator.api-key")).toBeNull();
@@ -467,7 +634,8 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Schedule" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That Task or Scope was not found. Refresh the selected Scope and try again.",
@@ -512,7 +680,8 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Abort Launch" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Abort Launch" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That Scope, Task, or Launch was not found. Refresh the selected Scope and try again.",
@@ -540,7 +709,8 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Schedule" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That Task cannot be Scheduled in its current state.",
@@ -585,7 +755,8 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Schedule" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Schedule" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The Schedule response from the server did not match the generated API contract.",
@@ -613,7 +784,8 @@ describe("operator tracer", () => {
     await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
     await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
     await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
-    await fireEvent.click(await screen.findByRole("button", { name: "Open Journal" }));
+    const inspector = await openTaskInspector();
+    await fireEvent.click(within(inspector).getByRole("button", { name: "Open Journal" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The Journal response from the server did not match the generated API contract.",
@@ -668,4 +840,9 @@ function launchResponse(id = "00000000-0000-4000-8000-000000000003") {
     skipped_at: null,
     is_aborted: null,
   };
+}
+
+async function openTaskInspector(taskId = "FETCH_RAW_DATA") {
+  await fireEvent.click(await screen.findByTestId(`task-node-${taskId}`));
+  return screen.findByRole("complementary", { name: "Task inspector" });
 }
