@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "./api";
-import { buildTaskGraph } from "./task-graph";
+import { buildTaskGraph, collectConnectedTaskIds } from "./task-graph";
 
 describe("buildTaskGraph", () => {
   it("builds an empty graph", () => {
@@ -29,6 +29,7 @@ describe("buildTaskGraph", () => {
       ["FETCH_RAW_DATA", "TRANSFORM_DATA"],
       ["TRANSFORM_DATA", "LOAD_RESULTS"],
     ]);
+    expect(graph.edges.every((edge) => edge.type === "default")).toBe(true);
     expect(positionOf(graph, "FETCH_RAW_DATA").x).toBeLessThan(
       positionOf(graph, "TRANSFORM_DATA").x,
     );
@@ -78,6 +79,25 @@ describe("buildTaskGraph", () => {
       { taskId: "LOAD_RESULTS", dependencyId: "UNKNOWN_EXPORT" },
     ]);
     expect(graph.nodes.map((node) => node.id)).toEqual(["TRANSFORM_DATA", "LOAD_RESULTS"]);
+  });
+
+  it("collects full upstream and downstream task sets from adjacency maps", () => {
+    const graph = buildTaskGraph([
+      task("FETCH_RAW_DATA"),
+      task("TRANSFORM_A", ["FETCH_RAW_DATA"]),
+      task("TRANSFORM_B", ["FETCH_RAW_DATA"]),
+      task("MERGE_RESULTS", ["TRANSFORM_A", "TRANSFORM_B"]),
+      task("LOAD_RESULTS", ["MERGE_RESULTS"]),
+    ]);
+
+    expect(Array.from(collectConnectedTaskIds("MERGE_RESULTS", graph.upstreamByTaskId))).toEqual([
+      "TRANSFORM_A",
+      "TRANSFORM_B",
+      "FETCH_RAW_DATA",
+    ]);
+    expect(Array.from(collectConnectedTaskIds("FETCH_RAW_DATA", graph.downstreamByTaskId))).toEqual(
+      ["TRANSFORM_A", "TRANSFORM_B", "MERGE_RESULTS", "LOAD_RESULTS"],
+    );
   });
 });
 
