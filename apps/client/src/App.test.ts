@@ -318,7 +318,7 @@ describe("operator tracer", () => {
     });
   });
 
-  it("Schedules an eligible Task, shows affected Tasks, and refreshes the selected Scope", async () => {
+  it("Schedules an eligible Task and refreshes the selected Scope", async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(
         jsonResponse({
@@ -389,13 +389,13 @@ describe("operator tracer", () => {
     expect(
       await screen.findByText("2 Tasks were Scheduled from Fetch raw data."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Affected Tasks")).toBeInTheDocument();
-    expect(screen.getByText("Fetch raw data, Transform data")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Schedule accepted. Dispatch will continue through reconciliation if queueing is delayed after commit.",
-      ),
-    ).toBeInTheDocument();
+      within(inspector).queryByRole("region", { name: "Schedule result" }),
+    ).not.toBeInTheDocument();
+    expect(within(inspector).queryByText("Affected Tasks")).not.toBeInTheDocument();
+    expect(within(inspector).queryByText("Schedule accepted")).not.toBeInTheDocument();
+    expect(within(inspector).queryByRole("button", { name: /Run/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getAllByText("PENDING")).toHaveLength(4);
     expect(fetch).toHaveBeenNthCalledWith(
       2,
