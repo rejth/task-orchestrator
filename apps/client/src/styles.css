@@ -95,7 +95,7 @@ label {
 .shell {
   display: grid;
   gap: 22px;
-  width: min(1120px, calc(100% - 32px));
+  width: min(1440px, calc(100% - 32px));
   margin: 0 auto;
   padding: 28px 0;
 }
@@ -107,7 +107,10 @@ label {
 }
 
 .toolbar {
-  grid-template-columns: minmax(220px, 1fr) minmax(260px, 420px) auto;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(220px, 320px) minmax(260px, 420px) minmax(
+      320px,
+      auto
+    );
   align-items: end;
   padding-bottom: 18px;
   border-bottom: 1px solid #d9e1e4;
@@ -143,7 +146,7 @@ label {
 }
 
 .workspace {
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
@@ -172,6 +175,11 @@ label {
 .message.success {
   color: #215339;
   background: #e5f5ec;
+}
+
+.message.warning {
+  color: #6b4700;
+  background: #fff1ce;
 }
 
 .schedule-result {
@@ -229,38 +237,64 @@ label {
   text-align: center;
 }
 
-.tasks {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.task-graph {
+  height: min(72vh, 760px);
+  min-height: 520px;
+  border: 1px solid #d9e1e4;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafb;
 }
 
-.tasks li {
+.task-graph .svelte-flow__node {
+  width: 280px;
+}
+
+.task-graph .svelte-flow__edge-path {
+  stroke: #7a8b93;
+  stroke-width: 2;
+}
+
+.task-graph .svelte-flow__controls {
+  box-shadow: 0 6px 18px rgba(24, 37, 45, 0.12);
+}
+
+.task-node {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
-  gap: 16px;
-  align-items: stretch;
-  border: 1px solid #e3e9eb;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid #d6e0e4;
   border-radius: 8px;
   padding: 14px;
+  color: #172026;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(24, 37, 45, 0.1);
 }
 
-.task-main,
-.launch-summary {
-  min-width: 0;
-}
-
-.tasks strong,
-.tasks span,
-.tasks dd,
-.tasks dt {
+.task-node strong,
+.task-node span,
+.task-node dd,
+.task-node dt {
   display: block;
 }
 
-.tasks strong {
-  margin-bottom: 4px;
+.task-node > p {
+  display: -webkit-box;
+  min-height: 2.9em;
+  margin: 0;
+  color: #33464f;
+  line-height: 1.45;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.task-node-handle {
+  width: 9px;
+  height: 9px;
+  border: 2px solid #ffffff;
+  background: #1f6f78;
 }
 
 .task-title-row {
@@ -268,12 +302,6 @@ label {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
-}
-
-.task-main p {
-  margin: 12px 0;
-  color: #33464f;
-  line-height: 1.45;
 }
 
 .task-title-row div span,
@@ -294,11 +322,13 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 14px;
 }
 
 .task-actions button {
-  flex: 0 1 150px;
+  flex: 1 1 116px;
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.84rem;
 }
 
 .metadata-label,
@@ -366,7 +396,7 @@ label {
   padding: 12px;
   background: #f8fafb;
   color: #3b4b54;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
 }
 
 .launch-summary.active {
@@ -506,8 +536,7 @@ label {
 }
 
 @media (max-width: 780px) {
-  .toolbar,
-  .workspace {
+  .toolbar {
     grid-template-columns: 1fr;
   }
 
@@ -520,10 +549,13 @@ label {
     flex: 1 1 150px;
   }
 
-  .tasks li,
   .task-title-row,
   .journal-heading {
     grid-template-columns: 1fr;
+  }
+
+  .task-graph {
+    height: 620px;
   }
 
   .status {

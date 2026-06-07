@@ -82,13 +82,18 @@ describe("operator tracer", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Initialize Scope" }));
 
     expect(await screen.findByText("Fetch raw data")).toBeInTheDocument();
+    expect(screen.getByTestId("svelte-flow__wrapper")).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^task-node-/)).toHaveLength(3);
+    expect(screen.getByTestId("task-node-FETCH_RAW_DATA")).toBeInTheDocument();
+    expect(screen.getByTestId("task-node-TRANSFORM_DATA")).toBeInTheDocument();
+    expect(screen.getByTestId("task-node-LOAD_RESULTS")).toBeInTheDocument();
     expect(screen.getByText("Fetches source data")).toBeInTheDocument();
     expect(screen.getAllByText("None")).toHaveLength(2);
     expect(screen.getByText("Transform data")).toBeInTheDocument();
     expect(screen.getAllByText("TRANSFORM_DATA")).toHaveLength(2);
     expect(screen.getByText("Current Launch")).toBeInTheDocument();
     expect(screen.getByText("Latest Launch")).toBeInTheDocument();
-    expect(screen.getAllByText("IN PROGRESS")).toHaveLength(2);
+    expect(screen.getAllByText("IN_PROGRESS")).toHaveLength(2);
     expect(localStorage.getItem("task-orchestrator.api-key")).toBe("secret-key");
     expect(fetch).toHaveBeenCalledWith(
       `/api/scopes/${scopeId}`,
@@ -112,6 +117,44 @@ describe("operator tracer", () => {
       await screen.findByText("This Scope does not have any Tasks in its Job."),
     ).toBeInTheDocument();
     expect(screen.getByText(scopeId)).toBeInTheDocument();
+  });
+
+  it("shows missing dependency endpoints without creating phantom Task nodes", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        tasks: [
+          taskResponse({
+            spec_id: "TRANSFORM_DATA",
+            label: "Transform data",
+            description: "Normalizes source data",
+            depends_on: ["FETCH_RAW_DATA"],
+            status: "NEW",
+          }),
+          taskResponse({
+            spec_id: "LOAD_RESULTS",
+            label: "Load results",
+            description: "Persists transformed data",
+            depends_on: ["TRANSFORM_DATA", "UNKNOWN_EXPORT"],
+            status: "NEW",
+          }),
+        ],
+      }),
+    );
+
+    render(App);
+
+    await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
+    await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
+    await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+
+    expect(await screen.findByText("Transform data")).toBeInTheDocument();
+    expect(screen.getByText("Load results")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Missing dependency endpoints: TRANSFORM_DATA depends on FETCH_RAW_DATA; LOAD_RESULTS depends on UNKNOWN_EXPORT",
+    );
+    expect(screen.getAllByTestId(/^task-node-/)).toHaveLength(2);
+    expect(screen.queryByTestId("task-node-FETCH_RAW_DATA")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("task-node-UNKNOWN_EXPORT")).not.toBeInTheDocument();
   });
 
   it("Schedules an eligible Task, shows affected Tasks, and refreshes the selected Scope", async () => {

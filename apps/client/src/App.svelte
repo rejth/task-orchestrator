@@ -1,5 +1,14 @@
 <script lang="ts">
 import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  MarkerType,
+  type Node,
+  type NodeTypes,
+  SvelteFlow,
+} from "@xyflow/svelte";
+import {
   ApiError,
   ApiValidationError,
   createApiClient,
@@ -8,6 +17,10 @@ import {
   type Task,
 } from "./lib/api";
 import { clearApiKey, loadApiKey, saveApiKey } from "./lib/auth";
+import TaskNode, { type TaskNodeViewData } from "./lib/TaskNode.svelte";
+import { buildTaskGraph, type TaskFlowEdge } from "./lib/task-graph";
+
+type TaskViewNode = Node<TaskNodeViewData, "task">;
 
 let apiKey = $state(loadApiKey());
 let scopeId = $state("");
@@ -29,6 +42,38 @@ let selectedJournal = $state<{
 } | null>(null);
 
 const scopePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const nodeTypes = { task: TaskNode } satisfies NodeTypes;
+let taskGraph = $derived(buildTaskGraph(tasks));
+let flowNodes = $state<TaskViewNode[]>([]);
+let flowEdges = $state<TaskFlowEdge[]>([]);
+
+$effect(() => {
+  flowNodes = taskGraph.nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      abortingLaunchId,
+      canSchedule,
+      displayStatus,
+      formatLaunchTime,
+      isLoading,
+      loadingJournalId,
+      onAbortLaunch: abortLaunch,
+      onLoadJournal: loadJournal,
+      onSchedule: scheduleTask,
+      schedulingTaskId,
+    },
+    domAttributes: {
+      "data-testid": `task-node-${node.id}`,
+    },
+  }));
+  flowEdges = taskGraph.edges.map((edge) => ({
+    ...edge,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+    },
+  }));
+});
 
 function storeKey() {
   apiKey = saveApiKey(apiKey);
@@ -284,27 +329,7 @@ function canSchedule(task: Task) {
 }
 
 function displayStatus(status: string) {
-  return status.replace(/_/g, " ");
-}
-
-function launchSummary(task: Task) {
-  if (task.current_launch) {
-    return {
-      label: "Current Launch",
-      kind: "active",
-      launch: task.current_launch,
-    };
-  }
-
-  if (task.latest_launch) {
-    return {
-      label: "Latest Launch",
-      kind: "terminal",
-      launch: task.latest_launch,
-    };
-  }
-
-  return undefined;
+  return status;
 }
 
 function formatLaunchTime(value: string | null | undefined) {
@@ -323,26 +348,14 @@ function formatLaunchTime(value: string | null | undefined) {
   }).format(date);
 }
 
-function launchTiming(task: Task) {
-  const launch = task.current_launch ?? task.latest_launch;
-
-  if (!launch) {
-    return [];
-  }
-
-  return [
-    ["Scheduled", launch.scheduled_at],
-    ["Started", launch.started_at],
-    ["Finished", launch.finished_at],
-    ["Failed", launch.failed_at],
-    ["Skipped", launch.skipped_at],
-  ].filter(
-    (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
-  );
-}
-
 function affectedTaskLabels() {
   return scheduleResult.map((task) => task.label).join(", ");
+}
+
+function missingDependencySummary() {
+  return taskGraph.missingDependencies
+    .map(({ taskId, dependencyId }) => `${taskId} depends on ${dependencyId}`)
+    .join("; ");
 }
 </script>
 
@@ -351,10 +364,10 @@ function affectedTaskLabels() {
 </svelte:head>
 
 <main class="shell">
-  <section class="toolbar" aria-label="Connection">
+  <section class="toolbar" aria-label="Connection and Scope">
     <div>
       <p class="eyebrow">Task Orchestrator</p>
-      <h1>Operator tracer</h1>
+      <h1>Task DAG console</h1>
     </div>
 
     <label class="key-field">
@@ -362,47 +375,48 @@ function affectedTaskLabels() {
       <input bind:value={apiKey} type="password" autocomplete="off" placeholder="Enter server key" />
     </label>
 
+    <label>
+      <span>Scope ID</span>
+      <input bind:value={scopeId} autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000" />
+    </label>
+
     <div class="toolbar-actions">
       <button type="button" class="secondary" onclick={storeKey}>Save key</button>
       <button type="button" class="ghost" onclick={forgetKey}>Clear</button>
+      <button type="button" onclick={initializeScope} disabled={isLoading}>
+        {isLoading ? "Calling API..." : "Initialize Scope"}
+      </button>
+      <button type="button" class="secondary" onclick={selectScope} disabled={isLoading}>
+        Select Scope
+      </button>
+      <button type="button" class="danger" onclick={stopRun} disabled={isLoading || !activeScopeId}>
+        {stoppingRun ? "Stopping..." : "Stop Run"}
+      </button>
     </div>
   </section>
 
-  <section class="workspace" aria-label="Scope tracer">
-    <div class="scope-panel">
-      <label>
-        <span>Scope ID</span>
-        <input bind:value={scopeId} autocomplete="off" placeholder="00000000-0000-4000-8000-000000000000" />
-      </label>
+  <section class="workspace" aria-label="Scope Task DAG">
+    {#if errorMessage}
+      <p class="message error" role="alert">{errorMessage}</p>
+    {/if}
 
-      <div class="actions">
-        <button type="button" onclick={initializeScope} disabled={isLoading}>
-          {isLoading ? "Calling API..." : "Initialize Scope"}
-        </button>
-        <button type="button" class="secondary" onclick={selectScope} disabled={isLoading}>
-          Select Scope
-        </button>
-        <button type="button" class="danger" onclick={stopRun} disabled={isLoading || !activeScopeId}>
-          {stoppingRun ? "Stopping..." : "Stop Run"}
-        </button>
+    {#if successMessage}
+      <p class="message success">{successMessage}</p>
+    {/if}
+
+    {#if taskGraph.missingDependencies.length > 0}
+      <p class="message warning" role="status">
+        Missing dependency endpoints: {missingDependencySummary()}
+      </p>
+    {/if}
+
+    {#if scheduleResult.length > 0}
+      <div class="schedule-result" aria-live="polite">
+        <span>Affected Tasks</span>
+        <strong>{affectedTaskLabels()}</strong>
+        <p>Schedule accepted. Dispatch will continue through reconciliation if queueing is delayed after commit.</p>
       </div>
-
-      {#if errorMessage}
-        <p class="message error" role="alert">{errorMessage}</p>
-      {/if}
-
-      {#if successMessage}
-        <p class="message success">{successMessage}</p>
-      {/if}
-
-      {#if scheduleResult.length > 0}
-        <div class="schedule-result" aria-live="polite">
-          <span>Affected Tasks</span>
-          <strong>{affectedTaskLabels()}</strong>
-          <p>Schedule accepted. Dispatch will continue through reconciliation if queueing is delayed after commit.</p>
-        </div>
-      {/if}
-    </div>
+    {/if}
 
     <div class="task-panel">
       <div class="panel-heading">
@@ -424,93 +438,23 @@ function affectedTaskLabels() {
           {/if}
         </div>
       {:else}
-        <ul class="tasks" aria-label="Tasks">
-          {#each tasks as task}
-            {@const summary = launchSummary(task)}
-            {@const currentLaunch = task.current_launch}
-            <li>
-              <div class="task-main">
-                <div class="task-title-row">
-                  <div>
-                    <strong>{task.label}</strong>
-                    <span>{task.spec_id}</span>
-                  </div>
-                  <span class={`status status-${task.status.toLowerCase().replace(/_/g, "-")}`}>
-                    {displayStatus(task.status)}
-                  </span>
-                </div>
-
-                <p>{task.description}</p>
-
-                <div class="metadata-row" aria-label={`${task.label} dependencies`}>
-                  <span class="metadata-label">Dependencies</span>
-                  {#if task.depends_on.length === 0}
-                    <span class="dependency empty-dependency">None</span>
-                  {:else}
-                    {#each task.depends_on as dependency}
-                      <span class="dependency">{dependency}</span>
-                    {/each}
-                  {/if}
-                </div>
-
-                <div class="task-actions">
-                  <button
-                    type="button"
-                    class="secondary"
-                    onclick={() => scheduleTask(task)}
-                    disabled={isLoading || !canSchedule(task)}
-                  >
-                    {schedulingTaskId === task.spec_id ? "Scheduling..." : "Schedule"}
-                  </button>
-                  {#if summary}
-                    <button
-                      type="button"
-                      class="ghost"
-                      onclick={() => loadJournal(task, summary.launch)}
-                      disabled={isLoading}
-                    >
-                      {loadingJournalId === summary.launch.id ? "Loading Journal..." : "Open Journal"}
-                    </button>
-                  {/if}
-                  {#if currentLaunch}
-                    <button
-                      type="button"
-                      class="danger"
-                      onclick={() => abortLaunch(task, currentLaunch)}
-                      disabled={isLoading}
-                    >
-                      {abortingLaunchId === currentLaunch.id ? "Aborting..." : "Abort Launch"}
-                    </button>
-                  {/if}
-                </div>
-              </div>
-
-              <aside class={`launch-summary ${summary?.kind ?? "none"}`}>
-                {#if summary}
-                  <span class="launch-label">{summary.label}</span>
-                  <strong>{displayStatus(summary.launch.status)}</strong>
-                  <span class="launch-id">{summary.launch.id}</span>
-                  <span>By {summary.launch.scheduled_by}</span>
-                  {#if summary.launch.is_aborted}
-                    <span class="aborted">Aborted</span>
-                  {/if}
-                  <dl>
-                    {#each launchTiming(task) as [label, value]}
-                      <div>
-                        <dt>{label}</dt>
-                        <dd>{formatLaunchTime(value)}</dd>
-                      </div>
-                    {/each}
-                  </dl>
-                {:else}
-                  <span class="launch-label">Launch</span>
-                  <strong>None</strong>
-                  <span>No Schedule or Dispatch has created a Launch yet.</span>
-                {/if}
-              </aside>
-            </li>
-          {/each}
-        </ul>
+        <div class="task-graph" aria-label="Task DAG">
+          <SvelteFlow
+            bind:nodes={flowNodes}
+            bind:edges={flowEdges}
+            {nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.22 }}
+            nodesConnectable={false}
+            deleteKey={null}
+            panOnScroll
+            minZoom={0.35}
+            maxZoom={1.4}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+            <Controls />
+          </SvelteFlow>
+        </div>
       {/if}
 
       {#if selectedJournal}
