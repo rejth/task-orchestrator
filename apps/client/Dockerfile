@@ -14,7 +14,9 @@ RUN pnpm build
 
 FROM nginx:1.29-alpine
 
-COPY apps/client/nginx.conf /etc/nginx/conf.d/default.conf
+ENV API_UPSTREAM=http://api:8000
+
+COPY apps/client/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=builder /app/apps/client/dist /usr/share/nginx/html
 
 EXPOSE 80
