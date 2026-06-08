@@ -52,37 +52,6 @@ Object.defineProperty(window, "DOMMatrixReadOnly", {
   value: DOMMatrixReadOnly,
 });
 
-Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-  configurable: true,
-  get() {
-    return this.classList.contains("task-node-handle") ? 9 : 280;
-  },
-});
-
-Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-  configurable: true,
-  get() {
-    return this.classList.contains("task-node-handle") ? 9 : 150;
-  },
-});
-
-HTMLElement.prototype.getBoundingClientRect = function () {
-  const width = this.offsetWidth;
-  const height = this.offsetHeight;
-
-  return {
-    bottom: height,
-    height,
-    left: 0,
-    right: width,
-    top: 0,
-    width,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  };
-};
-
 function createMemoryStorage(): Storage {
   const entries = new Map<string, string>();
 

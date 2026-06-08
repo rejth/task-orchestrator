@@ -1,0 +1,156 @@
+<script lang="ts">
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  type NodeTypes,
+  Panel,
+  SvelteFlow,
+} from "@xyflow/svelte";
+import TaskNode from "./TaskNode.svelte";
+import type { TaskConsoleController } from "./task-console.svelte";
+import { TASK_GRAPH_FIT_VIEW_OPTIONS, type TaskViewNode } from "./task-console-view";
+import type { TaskFlowEdge } from "./task-graph";
+
+interface Props {
+  controller: TaskConsoleController;
+}
+
+const nodeTypes = { task: TaskNode } satisfies NodeTypes;
+
+let { controller }: Props = $props();
+
+let nodes = $state<TaskViewNode[]>([]);
+let edges = $state<TaskFlowEdge[]>([]);
+
+$effect(() => {
+  nodes = controller.flowNodes;
+  edges = controller.flowEdges;
+});
+</script>
+
+<div class="task-graph" aria-label="Task DAG">
+  <SvelteFlow
+    bind:nodes
+    bind:edges
+    {nodeTypes}
+    fitView
+    fitViewOptions={TASK_GRAPH_FIT_VIEW_OPTIONS}
+    nodesConnectable={false}
+    nodesDraggable={true}
+    deleteKey={null}
+    panOnScroll
+    minZoom={0.35}
+    maxZoom={1.4}
+    proOptions={{ hideAttribution: true }}
+    onnodeclick={({ node }) => controller.selectTask(node.id)}
+  >
+    <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
+    <Controls fitViewOptions={TASK_GRAPH_FIT_VIEW_OPTIONS} />
+    <Panel position="top-right" class="graph-panel">
+      <button type="button" class="ghost compact" onclick={() => controller.resetGraphLayout()}>
+        Reset layout
+      </button>
+    </Panel>
+</SvelteFlow>
+</div>
+
+<style>
+  .task-graph {
+    height: clamp(520px, calc(100vh - 230px), 820px);
+    min-height: 520px;
+    border: 1px solid #d9e1e4;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f8fafb;
+  }
+
+  .task-graph :global(.svelte-flow__node) {
+    width: 300px;
+  }
+
+  .task-graph :global(.svelte-flow__edge-path) {
+    stroke: #7a8b93;
+    stroke-width: 2;
+  }
+
+  .task-graph :global(.task-flow-edge-muted .svelte-flow__edge-path) {
+    stroke: #b9c4c8;
+    stroke-width: 1.5;
+    opacity: 0.16;
+  }
+
+  .task-graph :global(.task-flow-edge-upstream .svelte-flow__edge-path) {
+    stroke: #d6aa30;
+    stroke-width: 4;
+  }
+
+  .task-graph :global(.task-flow-edge-downstream .svelte-flow__edge-path) {
+    stroke: #08717c;
+    stroke-width: 4;
+  }
+
+  .task-graph :global(.svelte-flow__controls) {
+    box-shadow: 0 6px 18px rgba(24, 37, 45, 0.12);
+  }
+
+  :global(.task-flow-node-upstream),
+  :global(.task-flow-node-downstream) {
+    z-index: 3;
+  }
+
+  :global(.task-flow-node-selected) {
+    z-index: 4;
+  }
+
+  :global(.task-flow-node-selected .task-node) {
+    border-color: #08717c;
+    background: #f7feff;
+    box-shadow:
+      0 0 0 4px rgba(8, 113, 124, 0.24),
+      0 16px 42px rgba(8, 113, 124, 0.22);
+  }
+
+  :global(.task-flow-node-upstream .task-node) {
+    border-color: #9b6a00;
+    background: #fffaf0;
+    box-shadow:
+      0 0 0 3px rgba(155, 106, 0, 0.2),
+      0 12px 30px rgba(155, 106, 0, 0.13);
+  }
+
+  :global(.task-flow-node-downstream .task-node) {
+    border-color: #08717c;
+    background: #f0fbfc;
+    box-shadow:
+      0 0 0 3px rgba(8, 113, 124, 0.19),
+      0 12px 30px rgba(8, 113, 124, 0.14);
+  }
+
+  :global(.task-flow-node-muted .task-node) {
+    border-color: #dfe6e8;
+    opacity: 0.34;
+    filter: grayscale(0.75);
+    box-shadow: none;
+  }
+
+  :global(.task-flow-node-muted .task-node-handle) {
+    background: #9aa8ae;
+  }
+
+  :global(.graph-panel) {
+    display: flex;
+    gap: 8px;
+    border: 1px solid #d9e1e4;
+    border-radius: 6px;
+    padding: 6px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 6px 18px rgba(24, 37, 45, 0.1);
+  }
+
+  @media (max-width: 780px) {
+    .task-graph {
+      height: 560px;
+    }
+  }
+</style>
