@@ -11,14 +11,14 @@ from task_orchestrator.domain.job import InvalidChangeTaskStatusOperation, Requi
 from task_orchestrator.domain.journal import Log, LogLevel, UnclassifiedLogRecord
 from task_orchestrator.domain.scoped_task import LaunchNotFound
 from task_orchestrator.domain.task import TaskSpecificationId
-from task_orchestrator.handlers.demo import DemoHandler
+from task_orchestrator.handlers.demo import build_demo_handler_registry, demo_task_runtime_seconds
 from task_orchestrator.handlers.interface import TaskHandleStatus
 from task_orchestrator.infrastructure.celery.app import get_celery_app
 from task_orchestrator.services.task_dispatcher import TASK_NAME, TaskDispatcher
 
 logger = logging.getLogger(__name__)
 
-_HANDLERS: dict[TaskSpecificationId, type] = dict.fromkeys(TaskSpecificationId, DemoHandler)
+_HANDLERS = build_demo_handler_registry()
 
 celery_app = get_celery_app()
 
@@ -94,7 +94,13 @@ def task_runner(
             except InvalidChangeTaskStatusOperation:
                 logger.warning("Duplicate or stale message for launch %s — discarding", launch_id)
                 return
-            status, logs = _run_handler(task_spec_id=task_spec_id, scope_id=scope_id, launch_id=launch_uuid)
+            status, logs = _run_handler(
+                task_spec_id=task_spec_id,
+                scope_id=scope_id,
+                launch_id=launch_uuid,
+                min_runtime_seconds=settings.DEMO_TASK_MIN_SECONDS,
+                max_runtime_seconds=settings.DEMO_TASK_MAX_SECONDS,
+            )
 
             if logs:
                 service.update_journal(scope_id=scope_id, task_id=task_spec_id, launch_id=launch_uuid, logs=logs)
@@ -146,10 +152,14 @@ def task_runner(
 
 
 def _run_handler(
-    task_spec_id: TaskSpecificationId, scope_id: str, launch_id: UUID
+    task_spec_id: TaskSpecificationId,
+    scope_id: str,
+    launch_id: UUID,
+    min_runtime_seconds: float = 10.0,
+    max_runtime_seconds: float = 15.0,
 ) -> tuple[TaskHandleStatus, list[Log]]:
-    handler_cls = _HANDLERS.get(task_spec_id)
-    if handler_cls is None:
+    handler_factory = _HANDLERS.get(task_spec_id)
+    if handler_factory is None:
         record = UnclassifiedLogRecord(
             message=f"No handler for task '{task_spec_id.value}'. Launch will be skipped.",
             timestamp=datetime.datetime.now(),
@@ -157,4 +167,9 @@ def _run_handler(
         )
         logger.warning(str(record))
         return TaskHandleStatus.SKIP, [record]
-    return handler_cls().run(scope_id=scope_id)
+    runtime_seconds = demo_task_runtime_seconds(
+        task_id=task_spec_id,
+        min_seconds=min_runtime_seconds,
+        max_seconds=max_runtime_seconds,
+    )
+    return handler_factory(runtime_seconds).run(scope_id=scope_id)
