@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { launchResponse, taskResponse } from "../test/fixtures";
+import { launchResponse, taskResponse } from "$test/fixtures";
 import TaskInspector from "./TaskInspector.svelte";
 
 describe("TaskInspector", () => {

@@ -1,12 +1,22 @@
 <script lang="ts">
-import type { TaskConsoleController } from "./task-console.svelte";
-import { ACTIVE_WORK_POLL_INTERVAL_MS } from "./task-console-view";
+import type { TaskConsoleController } from "$lib/services/task-console/task-console.svelte";
+import { ACTIVE_WORK_POLL_INTERVAL_MS } from "$lib/services/task-console/task-console-view";
 
 interface Props {
   controller: TaskConsoleController;
 }
 
 let { controller }: Props = $props();
+let demoScopeRequested = false;
+
+$effect(() => {
+  if (demoScopeRequested) {
+    return;
+  }
+
+  demoScopeRequested = true;
+  void controller.initializeDemoScope();
+});
 
 $effect(() => {
   controller.resetGraphLayout();

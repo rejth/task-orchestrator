@@ -27,11 +27,10 @@ the `api` service inside the Compose network.
 Full-stack smoke path:
 
 1. Open `http://localhost:5173`.
-2. Enter the `API_KEY` value from `.env`.
-3. Enter a UUID Scope ID, for example `00000000-0000-4000-8000-000000000001`.
-4. Click **Initialize Scope**. The Task console should load the Job Task list.
-5. Click **Select Scope** with the same Scope ID after refreshing the page. The
-   client should reach the API through `/api` and display the same Tasks.
+2. The demo Scope initializes automatically and renders the Task DAG canvas.
+3. Use **Refresh** in the header to reload the graph.
+4. Select a Task node to open the inspector drawer with Task-specific actions
+   and launch details.
 
 Useful container commands:
 
@@ -120,20 +119,19 @@ review and commit those changes with the API change that caused them.
 | `DELETE` | `/api/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}` | Abort a running launch |
 | `GET` | `/api/scopes/{scope_id}/tasks/{task_id}/launches/{launch_id}/journal` | Fetch execution logs |
 
-Pass `X-API-Key: <key>` on API requests. Scheduling actions are attributed to the authenticated API key.
-
 ## Demo task graph
 
-Six generic tasks wired as a diamond DAG to exercise parallel dispatch:
+Representative report-preparation tasks wired as a compact DAG to exercise
+parallel dispatch and downstream invalidation:
 
 ```
-FETCH_RAW_DATA
-    ├──▶ VALIDATE_DATA  ─────┐
-    └──▶ TRANSFORM_DATA ─────▶ AGGREGATE_DATA ──▶ GENERATE_REPORT
-                                               └──▶ EXPORT_RESULTS
+RELOAD_PATIENT_DATA
+    ├──▶ RELOAD_GENOMICS ───────▶ MATCH_TREATMENTS ─────▶ EXPORT_REPORT
+    ├──▶ RELOAD_EVIDENCE ───────┘                         └──▶ PUSH_REPORT
+    └──▶ RELOAD_PARAMETERS ─────▶ CREATE_SETTINGS ───────▶ PUSH_SETTINGS
 ```
 
-`VALIDATE_DATA` and `TRANSFORM_DATA` run in parallel. Both must succeed before `AGGREGATE_DATA` starts.
+Independent reload and export branches run in parallel where dependencies allow.
 
 ## Project structure
 

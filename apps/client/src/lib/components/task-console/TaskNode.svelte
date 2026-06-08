@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte";
-import type { TaskNodeData } from "./task-graph";
+import type { TaskNodeData } from "$lib/services/task-console/task-graph";
 
 export type TaskNodeViewData = TaskNodeData & {
   displayStatus: (status: string) => string;

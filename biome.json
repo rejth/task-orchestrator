@@ -39,6 +39,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/client/src/lib/components/ui/**/*.svelte"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useImportType": "off"
+          }
+        }
+      }
     }
   ],
   "javascript": {
@@ -53,6 +63,9 @@
     }
   },
   "css": {
+    "parser": {
+      "tailwindDirectives": true
+    },
     "formatter": {
       "quoteStyle": "double"
     }
