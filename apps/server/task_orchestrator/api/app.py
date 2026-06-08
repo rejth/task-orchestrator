@@ -2,10 +2,9 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 
 from task_orchestrator.api.config import get_settings
-from task_orchestrator.api.deps import verify_api_key
 from task_orchestrator.api.routers.tasks import router as tasks_router
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,6 @@ def create_app() -> FastAPI:
         description="DAG-based task runner with state machines and Celery dispatch",
         version="1.0.0",
         lifespan=lifespan,
-        dependencies=[Depends(verify_api_key)],
     )
     app.include_router(tasks_router, prefix="/api")
     return app

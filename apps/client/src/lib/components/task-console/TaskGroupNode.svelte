@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte";
-import type { TaskGroupNodeData } from "./task-graph";
+import type { TaskGroupNodeData } from "$lib/services/task-console/task-graph";
 
 export type TaskGroupNodeViewData = TaskGroupNodeData & {
   selectionRole: "selected" | "upstream" | "downstream" | "neutral";

@@ -1,4 +1,3 @@
-import os
 from collections.abc import Generator
 from unittest.mock import MagicMock
 
@@ -9,18 +8,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import task_orchestrator.infrastructure.database.models  # noqa: F401 — registers all ORM models in Base.metadata
 from task_orchestrator.api.app import create_app
-from task_orchestrator.api.deps import get_db, get_service, verify_api_key
+from task_orchestrator.api.deps import get_db, get_service
 from task_orchestrator.domain.job import OperationResult
 from task_orchestrator.infrastructure.database.base import Base
 from task_orchestrator.infrastructure.repositories.jobs_repo import SQLJobsRepository
 from task_orchestrator.services.tasks_management_service import TasksManagementService
 
-TEST_API_KEY = "test-key"
 TEST_DATABASE_URL = "sqlite:///:memory:"
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    os.environ.setdefault("API_KEY", TEST_API_KEY)
 
 
 class _NoQueueService(TasksManagementService):
@@ -68,7 +62,6 @@ def client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_service] = override_get_service
-    app.dependency_overrides[verify_api_key] = lambda: TEST_API_KEY
 
-    with TestClient(app, headers={"X-API-Key": TEST_API_KEY}) as c:
+    with TestClient(app) as c:
         yield c

@@ -5,7 +5,7 @@ import type {
   LaunchSchema,
   TaskListResponse,
   TaskSchema,
-} from "./api-contract";
+} from "$lib/api-contract/types.gen";
 import {
   zAbortTaskApiScopesScopeIdTasksTaskIdLaunchesLaunchIdDeleteResponse,
   zInitScopeApiScopesScopeIdPostResponse,
@@ -13,7 +13,7 @@ import {
   zLaunchSchema,
   zStopRunApiScopesScopeIdRunDeleteResponse,
   zTaskSchema,
-} from "./api-contract/zod.gen";
+} from "$lib/api-contract/zod.gen";
 
 export class ApiError extends Error {
   constructor(
@@ -37,6 +37,7 @@ export type Launch = LaunchSchema;
 export type JournalEntry = JournalEntrySchema;
 
 const localDateTime = z.iso.datetime({ local: true, offset: true });
+
 const launchSchema = zLaunchSchema.extend({
   failed_at: localDateTime.nullish(),
   finished_at: localDateTime.nullish(),
@@ -44,40 +45,33 @@ const launchSchema = zLaunchSchema.extend({
   skipped_at: localDateTime.nullish(),
   started_at: localDateTime.nullish(),
 });
+
 const taskSchema = zTaskSchema.extend({
   current_launch: launchSchema.nullish(),
   latest_launch: launchSchema.nullish(),
 });
+
 const taskListResponseSchema = z.object({
   tasks: z.array(taskSchema),
 }) satisfies ZodType<TaskListResponse>;
+
 const journalEntrySchema = zJournalEntrySchema.extend({
   timestamp: localDateTime,
 });
+
 const journalResponseSchema = z.object({
   journal: z.array(journalEntrySchema),
 }) satisfies ZodType<JournalResponse>;
 
-type ApiClientOptions = {
-  apiKey: string;
-  onUnauthorized: () => void;
-};
-
-export function createApiClient({ apiKey, onUnauthorized }: ApiClientOptions) {
+export function createApiClient() {
   async function request<T>(path: string, schema: ZodType<T>, init: RequestInit = {}) {
     const response = await fetch(path, {
       ...init,
       headers: {
         Accept: "application/json",
-        "X-API-Key": apiKey,
         ...init.headers,
       },
     });
-
-    if (response.status === 401) {
-      onUnauthorized();
-      throw new ApiError("The API key was rejected. Enter a valid key to continue.", 401);
-    }
 
     if (!response.ok) {
       throw new ApiError(await readError(response), response.status);

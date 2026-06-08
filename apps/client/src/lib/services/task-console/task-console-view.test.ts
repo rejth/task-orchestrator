@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskResponse } from "../test/fixtures";
+import { taskResponse } from "$test/fixtures";
 import { buildFlowEdges, buildFlowNodes } from "./task-console-view";
 import { buildTaskGraph } from "./task-graph";
 
