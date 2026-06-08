@@ -328,13 +328,6 @@
         "title": "ValidationError",
         "type": "object"
       }
-    },
-    "securitySchemes": {
-      "APIKeyHeader": {
-        "in": "header",
-        "name": "X-API-Key",
-        "type": "apiKey"
-      }
     }
   },
   "info": {
@@ -382,11 +375,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "summary": "Init Scope",
         "tags": [
           "tasks"
@@ -423,11 +411,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "summary": "Stop Run",
         "tags": [
           "tasks"
@@ -471,11 +454,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "summary": "Get Tasks",
         "tags": [
           "tasks"
@@ -530,11 +508,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "summary": "Abort Task",
         "tags": [
           "tasks"
@@ -596,11 +569,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "summary": "Get Journal",
         "tags": [
           "tasks"
@@ -653,11 +621,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ],
         "summary": "Schedule Task",
         "tags": [
           "tasks"

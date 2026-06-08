@@ -1,5 +1,4 @@
 import { ApiError, ApiValidationError, createApiClient, type Launch, type Task } from "./api";
-import { clearApiKey, loadApiKey, saveApiKey } from "./auth";
 import {
   buildFlowEdges,
   buildFlowNodes,
@@ -13,10 +12,10 @@ import {
 import { buildTaskGraph, collectConnectedTaskIds, type TaskFlowEdge } from "./task-graph";
 
 const scopePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const DEMO_SCOPE_ID = "00000000-0000-4000-8000-000000000001";
 
 export class TaskConsoleController {
-  apiKey = $state(loadApiKey());
-  scopeId = $state("");
+  scopeId = $state(DEMO_SCOPE_ID);
   activeScopeId = $state("");
   tasks = $state<Task[]>([]);
   errorMessage = $state("");
@@ -124,41 +123,25 @@ export class TaskConsoleController {
     this.selectedJournal = null;
   }
 
-  storeKey() {
-    this.apiKey = saveApiKey(this.apiKey);
-    this.successMessage = this.apiKey.length > 0 ? "API key saved for this browser." : "";
-    this.errorMessage = "";
-  }
-
-  forgetKey() {
-    clearApiKey();
-    this.apiKey = "";
-    this.tasks = [];
-    this.activeScopeId = "";
-    this.automaticPollingStopped = false;
-    this.selectedJournal = null;
-    this.selectedTaskId = "";
-    this.successMessage = "";
-    this.errorMessage = "The API key was cleared.";
-  }
-
-  async initializeScope() {
-    await this.withApi(async (client, cleanScopeId) => {
-      const result = await client.initializeScope(cleanScopeId);
-      this.activeScopeId = result.scope_id;
-      this.tasks = await client.getTasks(result.scope_id);
-      this.selectedJournal = null;
-      this.successMessage = `Scope ${result.scope_id} was initialized.`;
-    });
-  }
-
-  async selectScope() {
-    await this.withApi(async (client, cleanScopeId) => {
-      this.tasks = await client.getTasks(cleanScopeId);
-      this.activeScopeId = cleanScopeId;
-      this.selectedJournal = null;
-      this.successMessage = `Scope ${cleanScopeId} is selected.`;
-    });
+  async initializeDemoScope() {
+    await this.withApi(
+      async (client, cleanScopeId) => {
+        let selectedScopeId = cleanScopeId;
+        try {
+          const result = await client.initializeScope(cleanScopeId);
+          selectedScopeId = result.scope_id;
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 409) {
+            throw error;
+          }
+        }
+        this.activeScopeId = selectedScopeId;
+        this.tasks = await client.getTasks(selectedScopeId);
+        this.selectedJournal = null;
+        this.successMessage = "";
+      },
+      { scopeIdOverride: DEMO_SCOPE_ID },
+    );
   }
 
   async refreshActiveScope(options: { preserveJournal?: boolean; quiet?: boolean } = {}) {
@@ -287,7 +270,6 @@ export class TaskConsoleController {
       scopeIdOverride?: string;
     } = {},
   ) {
-    const cleanKey = saveApiKey(this.apiKey);
     const cleanScopeId = (options.scopeIdOverride ?? this.scopeId).trim();
 
     if (!options.quiet) {
@@ -298,28 +280,16 @@ export class TaskConsoleController {
       this.selectedJournal = null;
     }
 
-    if (cleanKey.length === 0) {
-      this.errorMessage = "Enter an API key before calling the server.";
-      return false;
-    }
-
     if (!scopePattern.test(cleanScopeId)) {
-      this.errorMessage = "Enter a Scope ID as a valid UUID.";
+      this.errorMessage = "The demo Scope ID is not a valid UUID.";
       return false;
     }
 
-    this.apiKey = cleanKey;
     if (!options.quiet) {
       this.isLoading = true;
     }
 
-    const client = createApiClient({
-      apiKey: cleanKey,
-      onUnauthorized: () => {
-        clearApiKey();
-        this.apiKey = "";
-      },
-    });
+    const client = createApiClient();
 
     try {
       await action(client, cleanScopeId);
@@ -331,10 +301,6 @@ export class TaskConsoleController {
       return true;
     } catch (error) {
       this.errorMessage = options.explainError?.(error) ?? explainError(error);
-      if (error instanceof ApiError && error.status === 401) {
-        this.tasks = [];
-        this.activeScopeId = "";
-      }
       if (error instanceof ApiValidationError) {
         this.tasks = [];
         this.activeScopeId = "";
@@ -355,11 +321,11 @@ export class TaskConsoleController {
 export function explainError(error: unknown) {
   if (error instanceof ApiError) {
     if (error.status === 404) {
-      return "No Scope exists for that ID. Initialize it first or enter another Scope ID.";
+      return "The demo Scope was not found. Refresh to recreate it.";
     }
 
     if (error.status === 409) {
-      return "A Scope with that ID already exists. Select it instead.";
+      return "The demo Scope already exists.";
     }
 
     return error.message;
@@ -392,7 +358,7 @@ export function explainScheduleError(error: unknown) {
 
 export function explainRunControlError(error: unknown) {
   if (error instanceof ApiError && error.status === 404) {
-    return "No Scope exists for that run. Initialize it first or enter another Scope ID.";
+    return "No demo Scope exists for that run. Refresh the page and try again.";
   }
 
   if (error instanceof ApiValidationError) {

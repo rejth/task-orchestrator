@@ -1,7 +1,7 @@
 import { MarkerType, type Node } from "@xyflow/svelte";
+import type { TaskGroupNodeViewData } from "$lib/components/task-console/TaskGroupNode.svelte";
+import type { TaskNodeViewData } from "$lib/components/task-console/TaskNode.svelte";
 import type { JournalEntry, Launch, Task } from "./api";
-import type { TaskGroupNodeViewData } from "./TaskGroupNode.svelte";
-import type { TaskNodeViewData } from "./TaskNode.svelte";
 import type { MissingDependency, TaskFlowEdge, TaskFlowNode, TaskGraph } from "./task-graph";
 
 export type TaskViewNode =
@@ -22,7 +22,7 @@ export type LaunchSummary = {
 };
 
 export const ACTIVE_WORK_POLL_INTERVAL_MS = 5_000;
-export const TASK_GRAPH_FIT_VIEW_OPTIONS = { padding: 0.22 };
+export const TASK_GRAPH_FIT_VIEW_OPTIONS = { includeHiddenNodes: true, padding: 0.22 };
 
 const ACTIVE_TASK_STATUSES = new Set(["PENDING", "IN_PROGRESS"]);
 
@@ -161,8 +161,17 @@ export function buildFlowEdges(
   upstreamTaskIds: Set<string>,
   downstreamTaskIds: Set<string>,
 ) {
+  const taskById = new Map(
+    graph.nodes.filter((node) => node.type === "task").map((node) => [node.id, node.data.task]),
+  );
+
   return graph.edges.map((edge) => {
-    const edgeClassName = edgeClass(edge, selectedTaskId, upstreamTaskIds, downstreamTaskIds);
+    const edgeClassName = [
+      edgeClass(edge, selectedTaskId, upstreamTaskIds, downstreamTaskIds),
+      hasPendingSourceTask(edge, taskById) ? "task-flow-edge-pending-source" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return {
       ...edge,
@@ -173,6 +182,12 @@ export function buildFlowEdges(
       },
     };
   });
+}
+
+function hasPendingSourceTask(edge: TaskFlowEdge, taskById: Map<string, Task>) {
+  return (edge.data?.sourceTaskIds ?? [edge.source]).some(
+    (taskId) => taskById.get(taskId)?.status === "PENDING",
+  );
 }
 
 export function taskSelectionRole(

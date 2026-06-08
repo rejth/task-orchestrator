@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from task_orchestrator.api.deps import get_db, get_service, get_tasks_repo, verify_api_key
+from task_orchestrator.api.deps import get_db, get_service, get_tasks_repo
 from task_orchestrator.api.schemas.journal import JournalEntrySchema, JournalResponse
 from task_orchestrator.api.schemas.tasks import (
     LaunchSchema,
@@ -38,6 +38,7 @@ from task_orchestrator.services.tasks_management_service import JobNotFound, Tas
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/scopes", tags=["tasks"])
+DEMO_USER = "demo"
 
 
 def _launch_to_schema(launch: TaskLaunch | None) -> Optional[LaunchSchema]:
@@ -121,14 +122,13 @@ def schedule_task(
     task_id: str,
     db: Session = Depends(get_db),
     service: TasksManagementService = Depends(get_service),
-    api_key: str = Depends(verify_api_key),
 ) -> ScheduleResponse:
     try:
         spec_id = TaskSpecificationId(task_id)
-        result = service.schedule_task(scope_id=str(scope_id), task_id=spec_id, user=api_key)
+        result = service.schedule_task(scope_id=str(scope_id), task_id=spec_id, user=DEMO_USER)
         db.commit()
         try:
-            service.send_to_queue(result=result, user=api_key)
+            service.send_to_queue(result=result, user=DEMO_USER)
         except Exception as dispatch_err:
             logger.error(
                 "Dispatch failed after commit for scope %s — reconciliation sweep will retry: %s",
@@ -147,7 +147,6 @@ def schedule_task(
 def stop_run(
     scope_id: UUID,
     service: TasksManagementService = Depends(get_service),
-    api_key: str = Depends(verify_api_key),
 ) -> Response:
     try:
         service.stop_run(scope_id=str(scope_id))

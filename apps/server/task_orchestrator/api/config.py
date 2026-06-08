@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     ENVIRONMENT: str = "development"
     TASK_EXPIRY_SECONDS: int = 3600
-    API_KEY: str = ""
     RECONCILIATION_SWEEP_INTERVAL_SECONDS: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

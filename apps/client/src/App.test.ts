@@ -16,28 +16,23 @@ describe("Task DAG console", () => {
   });
 
   it("loads a Scope, renders Task nodes, and opens the inspector", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({
-        tasks: [
-          taskResponse({ spec_id: "FETCH_RAW_DATA", label: "Fetch raw data" }),
-          taskResponse({
-            spec_id: "TRANSFORM_DATA",
-            label: "Transform data",
-            description: "Normalizes source data",
-            depends_on: ["FETCH_RAW_DATA"],
-            status: "IN_PROGRESS",
-          }),
-          taskResponse({
-            spec_id: "LOAD_RESULTS",
-            label: "Load results",
-            depends_on: ["TRANSFORM_DATA"],
-          }),
-        ],
+    mockDemoScopeTasks([
+      taskResponse({ spec_id: "FETCH_RAW_DATA", label: "Fetch raw data" }),
+      taskResponse({
+        spec_id: "TRANSFORM_DATA",
+        label: "Transform data",
+        description: "Normalizes source data",
+        depends_on: ["FETCH_RAW_DATA"],
+        status: "IN_PROGRESS",
       }),
-    );
+      taskResponse({
+        spec_id: "LOAD_RESULTS",
+        label: "Load results",
+        depends_on: ["TRANSFORM_DATA"],
+      }),
+    ]);
 
     render(App);
-    await selectScope();
     await fireEvent.click(await screen.findByTestId("task-node-TRANSFORM_DATA"));
 
     const inspector = await screen.findByRole("complementary", { name: "Task inspector" });
@@ -51,25 +46,20 @@ describe("Task DAG console", () => {
   });
 
   it("reports missing dependency endpoints without creating phantom Task nodes", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({
-        tasks: [
-          taskResponse({
-            spec_id: "TRANSFORM_DATA",
-            label: "Transform data",
-            depends_on: ["FETCH_RAW_DATA"],
-          }),
-          taskResponse({
-            spec_id: "LOAD_RESULTS",
-            label: "Load results",
-            depends_on: ["TRANSFORM_DATA", "UNKNOWN_EXPORT"],
-          }),
-        ],
+    mockDemoScopeTasks([
+      taskResponse({
+        spec_id: "TRANSFORM_DATA",
+        label: "Transform data",
+        depends_on: ["FETCH_RAW_DATA"],
       }),
-    );
+      taskResponse({
+        spec_id: "LOAD_RESULTS",
+        label: "Load results",
+        depends_on: ["TRANSFORM_DATA", "UNKNOWN_EXPORT"],
+      }),
+    ]);
 
     render(App);
-    await selectScope();
 
     expect(await screen.findByText("Transform data")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -82,6 +72,7 @@ describe("Task DAG console", () => {
   it("keeps active-work polling quiet and stops after terminal state", async () => {
     vi.useFakeTimers();
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ scope_id: scopeId }, 201))
       .mockResolvedValueOnce(
         jsonResponse({
           tasks: [
@@ -108,19 +99,19 @@ describe("Task DAG console", () => {
       );
 
     render(App);
-    await selectScope();
     expect(await screen.findByText("PENDING")).toBeInTheDocument();
 
     await vi.advanceTimersByTimeAsync(5_000);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
     expect(await screen.findByText("SUCCESS")).toBeInTheDocument();
 
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it("wires inspector Task actions through the selected Scope", async () => {
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ scope_id: scopeId }, 201))
       .mockResolvedValueOnce(
         jsonResponse({
           tasks: [taskResponse({ status: "NEW" })],
@@ -141,7 +132,6 @@ describe("Task DAG console", () => {
       );
 
     render(App);
-    await selectScope();
     await fireEvent.click(await screen.findByTestId("task-node-FETCH_RAW_DATA"));
     const inspector = await screen.findByRole("complementary", { name: "Task inspector" });
     await fireEvent.click(within(inspector).getByRole("button", { name: "Schedule" }));
@@ -150,15 +140,15 @@ describe("Task DAG console", () => {
       await screen.findByText("1 Task was Scheduled from Fetch raw data."),
     ).toBeInTheDocument();
     expect(fetch).toHaveBeenNthCalledWith(
-      2,
+      3,
       `/api/scopes/${scopeId}/tasks/FETCH_RAW_DATA/schedule`,
       expect.objectContaining({ method: "POST" }),
     );
   });
 });
 
-async function selectScope() {
-  await fireEvent.input(screen.getByLabelText("API key"), { target: { value: "secret-key" } });
-  await fireEvent.input(screen.getByLabelText("Scope ID"), { target: { value: scopeId } });
-  await fireEvent.click(screen.getByRole("button", { name: "Select Scope" }));
+function mockDemoScopeTasks(tasks: ReturnType<typeof taskResponse>[]) {
+  vi.mocked(fetch)
+    .mockResolvedValueOnce(jsonResponse({ scope_id: scopeId }, 201))
+    .mockResolvedValueOnce(jsonResponse({ tasks }));
 }

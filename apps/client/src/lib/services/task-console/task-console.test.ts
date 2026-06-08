@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { jsonResponse, launchResponse, scopeId, taskResponse } from "../test/fixtures";
+import { jsonResponse, launchResponse, scopeId, taskResponse } from "$test/fixtures";
 import { TaskConsoleController } from "./task-console.svelte";
 
 describe("TaskConsoleController", () => {
   beforeEach(() => {
-    localStorage.clear();
     vi.stubGlobal("fetch", vi.fn());
   });
 
@@ -12,30 +11,48 @@ describe("TaskConsoleController", () => {
     vi.unstubAllGlobals();
   });
 
-  it("selects a Scope and stores the loaded Task list", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({
-        tasks: [
-          taskResponse({ spec_id: "FETCH_RAW_DATA", label: "Fetch raw data" }),
-          taskResponse({
-            spec_id: "TRANSFORM_DATA",
-            label: "Transform data",
-            depends_on: ["FETCH_RAW_DATA"],
-          }),
-        ],
-      }),
-    );
+  it("initializes the demo Scope and stores the loaded Task list", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ scope_id: scopeId }, 201))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tasks: [
+            taskResponse({ spec_id: "FETCH_RAW_DATA", label: "Fetch raw data" }),
+            taskResponse({
+              spec_id: "TRANSFORM_DATA",
+              label: "Transform data",
+              depends_on: ["FETCH_RAW_DATA"],
+            }),
+          ],
+        }),
+      );
     const controller = createController();
 
-    await controller.selectScope();
+    await controller.initializeDemoScope();
 
     expect(controller.activeScopeId).toBe(scopeId);
     expect(controller.tasks).toHaveLength(2);
-    expect(controller.successMessage).toBe(`Scope ${scopeId} is selected.`);
-    expect(fetch).toHaveBeenCalledWith(`/api/scopes/${scopeId}/tasks`, expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `/api/scopes/${scopeId}`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(2, `/api/scopes/${scopeId}/tasks`, expect.any(Object));
   });
 
-  it("schedules a Task and refreshes the selected Scope", async () => {
+  it("selects the existing demo Scope when initialization returns conflict", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ detail: "Scope already exists" }, 409))
+      .mockResolvedValueOnce(jsonResponse({ tasks: [taskResponse()] }));
+    const controller = createController();
+
+    await controller.initializeDemoScope();
+
+    expect(controller.activeScopeId).toBe(scopeId);
+    expect(controller.tasks).toHaveLength(1);
+  });
+
+  it("schedules a Task and refreshes the active demo Scope", async () => {
     const task = taskResponse({ status: "NEW" });
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({ tasks: [taskResponse({ status: "PENDING" })] }, 202))
@@ -52,20 +69,6 @@ describe("TaskConsoleController", () => {
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetch).toHaveBeenNthCalledWith(2, `/api/scopes/${scopeId}/tasks`, expect.any(Object));
-  });
-
-  it("clears stored credentials and loaded Scope state after unauthorized responses", async () => {
-    localStorage.setItem("task-orchestrator.api-key", "expired-key");
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ detail: "Invalid API key" }, 401));
-    const controller = createController({ apiKey: "expired-key", tasks: [taskResponse()] });
-
-    await controller.selectScope();
-
-    expect(controller.errorMessage).toContain("The API key was rejected");
-    expect(controller.apiKey).toBe("");
-    expect(controller.activeScopeId).toBe("");
-    expect(controller.tasks).toEqual([]);
-    expect(localStorage.getItem("task-orchestrator.api-key")).toBeNull();
   });
 
   it("stops quiet polling after a background refresh failure", async () => {
@@ -85,10 +88,9 @@ describe("TaskConsoleController", () => {
 });
 
 function createController(
-  overrides: Partial<Pick<TaskConsoleController, "activeScopeId" | "apiKey" | "tasks">> = {},
+  overrides: Partial<Pick<TaskConsoleController, "activeScopeId" | "tasks">> = {},
 ) {
   const controller = new TaskConsoleController();
-  controller.apiKey = overrides.apiKey ?? "secret-key";
   controller.scopeId = scopeId;
   controller.activeScopeId = overrides.activeScopeId ?? "";
   controller.tasks = overrides.tasks ?? [];

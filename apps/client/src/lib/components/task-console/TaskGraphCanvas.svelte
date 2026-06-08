@@ -7,11 +7,16 @@ import {
   Panel,
   SvelteFlow,
 } from "@xyflow/svelte";
+import { Button } from "$lib/components/ui/button/index.js";
+import type { TaskConsoleController } from "$lib/services/task-console/task-console.svelte";
+import {
+  TASK_GRAPH_FIT_VIEW_OPTIONS,
+  type TaskViewNode,
+} from "$lib/services/task-console/task-console-view";
+import type { TaskFlowEdge } from "$lib/services/task-console/task-graph";
+import TaskGraphAutoFit from "./TaskGraphAutoFit.svelte";
 import TaskGroupNode from "./TaskGroupNode.svelte";
 import TaskNode from "./TaskNode.svelte";
-import type { TaskConsoleController } from "./task-console.svelte";
-import { TASK_GRAPH_FIT_VIEW_OPTIONS, type TaskViewNode } from "./task-console-view";
-import type { TaskFlowEdge } from "./task-graph";
 
 interface Props {
   controller: TaskConsoleController;
@@ -23,6 +28,7 @@ let { controller }: Props = $props();
 
 let nodes = $state<TaskViewNode[]>([]);
 let edges = $state<TaskFlowEdge[]>([]);
+let fitKey = $derived(`${nodes.length}:${edges.length}:${nodes.map((node) => node.id).join("|")}`);
 
 $effect(() => {
   nodes = controller.flowNodes;
@@ -49,25 +55,25 @@ $effect(() => {
         controller.selectTask(node.id);
       }
     }}
+    onpaneclick={() => controller.closeInspector()}
   >
+    <TaskGraphAutoFit {fitKey} />
     <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
     <Controls fitViewOptions={TASK_GRAPH_FIT_VIEW_OPTIONS} />
     <Panel position="top-right" class="graph-panel">
-      <button type="button" class="ghost compact" onclick={() => controller.resetGraphLayout()}>
+      <Button type="button" variant="outline" size="sm" onclick={() => controller.resetGraphLayout()}>
         Reset layout
-      </button>
+      </Button>
     </Panel>
 </SvelteFlow>
 </div>
 
 <style>
   .task-graph {
-    height: clamp(520px, calc(100vh - 230px), 820px);
-    min-height: 520px;
-    border: 1px solid #d9e1e4;
-    border-radius: 8px;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
-    background: #f8fafb;
+    background: var(--muted);
   }
 
   .task-graph :global(.task-flow-node) {
@@ -99,8 +105,14 @@ $effect(() => {
     stroke-width: 4;
   }
 
+  .task-graph :global(.task-flow-edge-pending-source .svelte-flow__edge-path) {
+    stroke-dasharray: 8 7;
+    animation: pending-edge-dash 0.9s linear infinite;
+  }
+
   .task-graph :global(.svelte-flow__controls) {
-    box-shadow: 0 6px 18px rgba(24, 37, 45, 0.12);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
   }
 
   :global(.task-flow-node-upstream),
@@ -187,16 +199,16 @@ $effect(() => {
   :global(.graph-panel) {
     display: flex;
     gap: 8px;
-    border: 1px solid #d9e1e4;
-    border-radius: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 6px;
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 6px 18px rgba(24, 37, 45, 0.1);
+    background: color-mix(in oklab, var(--card) 94%, transparent);
+    box-shadow: var(--shadow-md);
   }
 
-  @media (max-width: 780px) {
-    .task-graph {
-      height: 560px;
+  @keyframes pending-edge-dash {
+    to {
+      stroke-dashoffset: -15;
     }
   }
 </style>

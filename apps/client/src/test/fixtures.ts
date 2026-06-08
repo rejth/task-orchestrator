@@ -1,4 +1,4 @@
-import type { Launch, Task } from "../lib/api";
+import type { Launch, Task } from "$lib/services/task-console/api";
 
 export const scopeId = "00000000-0000-4000-8000-000000000001";
 
@@ -27,7 +27,7 @@ export function launchResponse(id = "00000000-0000-4000-8000-000000000003"): Lau
   return {
     id,
     scheduled_at: "2026-06-05T10:00:00Z",
-    scheduled_by: "secret-key",
+    scheduled_by: "demo",
     status: "PENDING",
     started_at: null,
     finished_at: null,

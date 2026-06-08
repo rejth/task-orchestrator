@@ -7,6 +7,12 @@
     "noEmit": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
+    "paths": {
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"],
+      "$test": ["./src/test"],
+      "$test/*": ["./src/test/*"]
+    },
     "resolveJsonModule": true,
     "strict": true,
     "types": ["svelte", "vite/client", "vitest/globals", "@testing-library/jest-dom"]
