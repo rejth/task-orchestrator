@@ -1,8 +1,16 @@
 """Integration tests for the tasks HTTP API."""
 
+import datetime
 import uuid
+from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from task_orchestrator.domain.journal import FileLogRecord, LogFileExtension, LogLevel, LogType
+from task_orchestrator.domain.task import TaskSpecificationId
+from task_orchestrator.infrastructure.repositories.jobs_repo import SQLJobsRepository
+from task_orchestrator.services.tasks_management_service import TasksManagementService
 
 TASK_COUNT = 24  # active demo tasks in task_specifications.yml
 API_PREFIX = "/api"
@@ -87,3 +95,40 @@ def test_get_journal_for_nonexistent_launch_returns_404(client: TestClient):
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     resp = client.get(f"{API_PREFIX}/scopes/{scope_id}/tasks/RELOAD_PATIENT_DATA/launches/{uuid.uuid4()}/journal")
     assert resp.status_code == 404
+
+
+def test_file_logs_are_persisted(client: TestClient, db_session: Session):
+    scope_id = _scope_id()
+    client.post(f"{API_PREFIX}/scopes/{scope_id}")
+    schedule_resp = client.post(f"{API_PREFIX}/scopes/{scope_id}/tasks/RELOAD_PATIENT_DATA/schedule")
+    launch_id = uuid.UUID(schedule_resp.json()["tasks"][0]["current_launch"]["id"])
+
+    service = TasksManagementService(
+        jobs_repo=SQLJobsRepository(session=db_session),
+        broker=MagicMock(),
+    )
+    task_id = TaskSpecificationId.RELOAD_PATIENT_DATA
+    service.start_task(scope_id=scope_id, task_id=task_id, launch_id=launch_id)
+    service.update_journal(
+        scope_id=scope_id,
+        task_id=task_id,
+        launch_id=launch_id,
+        logs=[
+            FileLogRecord(
+                message="Produced patient snapshot.",
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+                level=LogLevel.INFO,
+                filename="patient-snapshot",
+                extension=LogFileExtension.JSON,
+                data=b'{"patient_id":"demo"}',
+            )
+        ],
+    )
+    db_session.commit()
+
+    journal = service.get_journal(scope_id=scope_id, task_id=task_id, launch_id=launch_id)
+    file_entry = next(entry for entry in journal if entry.log.type is LogType.FILE)
+    stored_file = service.get_log_file(scope_id=scope_id, task_id=task_id, launch_id=launch_id, log_id=file_entry.id)
+
+    assert stored_file.full_filename == "patient-snapshot.json"
+    assert stored_file.data == b'{"patient_id":"demo"}'
