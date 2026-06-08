@@ -36,7 +36,7 @@ describe("buildTaskGraph", () => {
     expect(positionOf(graph, "TRANSFORM_DATA").x).toBeLessThan(positionOf(graph, "LOAD_RESULTS").x);
   });
 
-  it("keeps fan-out dependents in the next dependency layer", () => {
+  it("keeps fan-out dependents in the next dependency rank", () => {
     const graph = buildTaskGraph([
       task("FETCH_RAW_DATA"),
       task("TRANSFORM_A", ["FETCH_RAW_DATA"]),
@@ -44,8 +44,67 @@ describe("buildTaskGraph", () => {
     ]);
 
     expect(graph.downstreamByTaskId.get("FETCH_RAW_DATA")).toEqual(["TRANSFORM_A", "TRANSFORM_B"]);
+    expect(positionOf(graph, "FETCH_RAW_DATA").x).toBeLessThan(positionOf(graph, "TRANSFORM_A").x);
+    expect(positionOf(graph, "FETCH_RAW_DATA").x).toBeLessThan(positionOf(graph, "TRANSFORM_B").x);
     expect(positionOf(graph, "TRANSFORM_A").x).toBe(positionOf(graph, "TRANSFORM_B").x);
-    expect(positionOf(graph, "TRANSFORM_A").y).toBeLessThan(positionOf(graph, "TRANSFORM_B").y);
+    expect(positionOf(graph, "TRANSFORM_A").y).not.toBe(positionOf(graph, "TRANSFORM_B").y);
+  });
+
+  it("wraps obvious parallel fan-out tasks in a bounded group", () => {
+    const graph = buildTaskGraph([
+      task("FETCH_RAW_DATA"),
+      task("TRANSFORM_A", ["FETCH_RAW_DATA"]),
+      task("TRANSFORM_B", ["FETCH_RAW_DATA"]),
+      task("TRANSFORM_C", ["FETCH_RAW_DATA"]),
+    ]);
+    const group = graph.nodes.find((node) => node.type === "taskGroup");
+
+    expect(group).toMatchObject({
+      id: "parallel:FETCH_RAW_DATA",
+      type: "taskGroup",
+      data: {
+        upstreamTaskId: "FETCH_RAW_DATA",
+        taskIds: ["TRANSFORM_A", "TRANSFORM_B", "TRANSFORM_C"],
+      },
+    });
+    const groupIndex = graph.nodes.findIndex((node) => node.id === "parallel:FETCH_RAW_DATA");
+    expect(groupIndex).toBeGreaterThanOrEqual(0);
+    expect(groupIndex).toBeLessThan(graph.nodes.findIndex((node) => node.id === "TRANSFORM_A"));
+    expect(graph.edges.map((edge) => [edge.source, edge.target])).toEqual([
+      ["FETCH_RAW_DATA", "parallel:FETCH_RAW_DATA"],
+    ]);
+
+    for (const taskId of ["TRANSFORM_A", "TRANSFORM_B", "TRANSFORM_C"]) {
+      expect(graph.nodes.find((node) => node.id === taskId)).toMatchObject({
+        parentId: "parallel:FETCH_RAW_DATA",
+        extent: "parent",
+      });
+    }
+  });
+
+  it("keeps child outgoing dependencies as real task edges", () => {
+    const graph = buildTaskGraph([
+      task("FETCH_RAW_DATA"),
+      task("TRANSFORM_A", ["FETCH_RAW_DATA"]),
+      task("TRANSFORM_B", ["FETCH_RAW_DATA"]),
+      task("TRANSFORM_C", ["FETCH_RAW_DATA"]),
+      task("LOAD_RESULTS", ["TRANSFORM_A", "TRANSFORM_B", "TRANSFORM_C"]),
+    ]);
+
+    expect(graph.edges.map((edge) => [edge.source, edge.target])).toEqual([
+      ["FETCH_RAW_DATA", "parallel:FETCH_RAW_DATA"],
+      ["TRANSFORM_A", "LOAD_RESULTS"],
+      ["TRANSFORM_B", "LOAD_RESULTS"],
+      ["TRANSFORM_C", "LOAD_RESULTS"],
+    ]);
+    expect(
+      graph.edges.find((edge) => edge.id === "FETCH_RAW_DATA->parallel:FETCH_RAW_DATA"),
+    ).toMatchObject({
+      data: {
+        sourceTaskIds: ["FETCH_RAW_DATA"],
+        targetTaskIds: ["TRANSFORM_A", "TRANSFORM_B", "TRANSFORM_C"],
+      },
+    });
   });
 
   it("places fan-in dependents after all present predecessors", () => {

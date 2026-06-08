@@ -1,12 +1,26 @@
-import type { Edge, Node } from "@xyflow/svelte";
+import { graphlib, layout } from "@dagrejs/dagre";
+import { type Edge, type Node, Position } from "@xyflow/svelte";
 import type { Task } from "./api";
 
 export type TaskNodeData = {
   task: Task;
 };
 
-export type TaskFlowNode = Node<TaskNodeData, "task">;
-export type TaskFlowEdge = Edge<Record<string, never>, "default">;
+export type TaskGroupNodeData = {
+  label: string;
+  taskIds: string[];
+  upstreamTaskId: string;
+  width: number;
+  height: number;
+};
+
+export type TaskFlowEdgeData = {
+  sourceTaskIds: string[];
+  targetTaskIds: string[];
+};
+
+export type TaskFlowNode = Node<TaskNodeData, "task"> | Node<TaskGroupNodeData, "taskGroup">;
+export type TaskFlowEdge = Edge<TaskFlowEdgeData, "default">;
 
 export type MissingDependency = {
   taskId: string;
@@ -21,8 +35,38 @@ export type TaskGraph = {
   missingDependencies: MissingDependency[];
 };
 
-const COLUMN_GAP = 420;
-const ROW_GAP = 220;
+const TASK_NODE_WIDTH = 300;
+const TASK_NODE_HEIGHT = 168;
+const TASK_NODE_RANK_SEPARATION = 150;
+const TASK_NODE_SEPARATION = 70;
+const PARALLEL_GROUP_MIN_TASKS = 3;
+const PARALLEL_GROUP_COLUMNS = 2;
+const PARALLEL_GROUP_PADDING_X = 28;
+const PARALLEL_GROUP_PADDING_TOP = 74;
+const PARALLEL_GROUP_PADDING_BOTTOM = 28;
+const PARALLEL_GROUP_COLUMN_GAP = 32;
+const PARALLEL_GROUP_ROW_GAP = 24;
+
+type ParallelTaskGroup = {
+  id: string;
+  label: string;
+  upstreamTaskId: string;
+  taskIds: string[];
+  childPositions: Map<string, { x: number; y: number }>;
+  width: number;
+  height: number;
+};
+
+type OuterLayoutNode = {
+  id: string;
+  width: number;
+  height: number;
+};
+
+type OuterLayoutEdge = {
+  source: string;
+  target: string;
+};
 
 export function buildTaskGraph(tasks: Task[]): TaskGraph {
   const taskIds = new Set(tasks.map((task) => task.spec_id));
@@ -57,98 +101,277 @@ export function buildTaskGraph(tasks: Task[]): TaskGraph {
     downstreamByTaskId.set(taskId, stableUnique(downstream));
   }
 
-  const layerByTaskId = calculateDependencyLayers(tasks, upstreamByTaskId, downstreamByTaskId);
-  const rowsByLayer = new Map<number, string[]>();
-
-  for (const task of tasks) {
-    const layer = layerByTaskId.get(task.spec_id) ?? 0;
-    rowsByLayer.set(layer, [...(rowsByLayer.get(layer) ?? []), task.spec_id]);
-  }
-
-  const rowByTaskId = new Map<string, number>();
-  for (const taskIdsInLayer of rowsByLayer.values()) {
-    taskIdsInLayer.forEach((taskId, row) => {
-      rowByTaskId.set(taskId, row);
-    });
-  }
+  const parallelGroups = detectParallelGroups(tasks, upstreamByTaskId, downstreamByTaskId);
+  const parallelGroupByTaskId = mapGroupsByTaskId(parallelGroups);
+  const outerLayoutNodes = buildOuterLayoutNodes(tasks, parallelGroups, parallelGroupByTaskId);
+  const outerLayoutEdges = buildOuterLayoutEdges(tasks, upstreamByTaskId, parallelGroupByTaskId);
+  const layoutByOuterNodeId = buildDagreLayout(outerLayoutNodes, outerLayoutEdges);
 
   return {
-    nodes: tasks.map((task) => {
-      const layer = layerByTaskId.get(task.spec_id) ?? 0;
-      const row = rowByTaskId.get(task.spec_id) ?? 0;
-
-      return {
-        id: task.spec_id,
-        type: "task",
-        data: { task },
-        position: {
-          x: layer * COLUMN_GAP,
-          y: row * ROW_GAP,
-        },
-        ariaLabel: `${task.label} Task`,
-      };
-    }),
-    edges: tasks.flatMap((task) =>
-      (upstreamByTaskId.get(task.spec_id) ?? []).map((dependencyId) => ({
-        id: `${dependencyId}->${task.spec_id}`,
-        type: "default" as const,
-        source: dependencyId,
-        target: task.spec_id,
-        ariaLabel: `${dependencyId} must finish before ${task.spec_id}`,
-      })),
-    ),
+    nodes: buildFlowGraphNodes(tasks, parallelGroups, parallelGroupByTaskId, layoutByOuterNodeId),
+    edges: buildFlowGraphEdges(tasks, upstreamByTaskId, parallelGroupByTaskId, parallelGroups),
     upstreamByTaskId,
     downstreamByTaskId,
     missingDependencies,
   };
 }
 
-function calculateDependencyLayers(
+function detectParallelGroups(
   tasks: Task[],
   upstreamByTaskId: Map<string, string[]>,
   downstreamByTaskId: Map<string, string[]>,
 ) {
-  const inDegree = new Map<string, number>();
-  const layerByTaskId = new Map<string, number>();
-  const taskOrder = new Map(tasks.map((task, index) => [task.spec_id, index]));
+  const groups: ParallelTaskGroup[] = [];
 
   for (const task of tasks) {
-    const upstream = upstreamByTaskId.get(task.spec_id) ?? [];
-    inDegree.set(task.spec_id, upstream.length);
-    layerByTaskId.set(task.spec_id, 0);
-  }
+    const candidateTaskIds = (downstreamByTaskId.get(task.spec_id) ?? []).filter((taskId) => {
+      const upstreamTaskIds = upstreamByTaskId.get(taskId) ?? [];
+      return upstreamTaskIds.length === 1 && upstreamTaskIds[0] === task.spec_id;
+    });
 
-  const queue = tasks
-    .filter((task) => (inDegree.get(task.spec_id) ?? 0) === 0)
-    .map((task) => task.spec_id);
-
-  for (let index = 0; index < queue.length; index += 1) {
-    const taskId = queue[index];
-    if (!taskId) {
+    if (candidateTaskIds.length < PARALLEL_GROUP_MIN_TASKS) {
       continue;
     }
 
-    for (const downstreamId of downstreamByTaskId.get(taskId) ?? []) {
-      layerByTaskId.set(
-        downstreamId,
-        Math.max(layerByTaskId.get(downstreamId) ?? 0, (layerByTaskId.get(taskId) ?? 0) + 1),
-      );
-
-      const nextDegree = (inDegree.get(downstreamId) ?? 0) - 1;
-      inDegree.set(downstreamId, nextDegree);
-
-      if (nextDegree === 0) {
-        queue.push(downstreamId);
-      }
-    }
-
-    const sortedTail = queue
-      .slice(index + 1)
-      .sort((left, right) => (taskOrder.get(left) ?? 0) - (taskOrder.get(right) ?? 0));
-    queue.splice(index + 1, sortedTail.length, ...sortedTail);
+    groups.push(createParallelGroup(task, candidateTaskIds));
   }
 
-  return layerByTaskId;
+  return groups;
+}
+
+function createParallelGroup(upstreamTask: Task, taskIds: string[]): ParallelTaskGroup {
+  const columns = Math.min(PARALLEL_GROUP_COLUMNS, taskIds.length);
+  const rows = Math.ceil(taskIds.length / columns);
+  const width =
+    PARALLEL_GROUP_PADDING_X * 2 +
+    columns * TASK_NODE_WIDTH +
+    (columns - 1) * PARALLEL_GROUP_COLUMN_GAP;
+  const height =
+    PARALLEL_GROUP_PADDING_TOP +
+    PARALLEL_GROUP_PADDING_BOTTOM +
+    rows * TASK_NODE_HEIGHT +
+    (rows - 1) * PARALLEL_GROUP_ROW_GAP;
+
+  return {
+    id: parallelGroupId(upstreamTask.spec_id),
+    label: `Parallel tasks after ${upstreamTask.label}`,
+    upstreamTaskId: upstreamTask.spec_id,
+    taskIds,
+    childPositions: new Map(
+      taskIds.map((taskId, index) => {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+
+        return [
+          taskId,
+          {
+            x: PARALLEL_GROUP_PADDING_X + column * (TASK_NODE_WIDTH + PARALLEL_GROUP_COLUMN_GAP),
+            y: PARALLEL_GROUP_PADDING_TOP + row * (TASK_NODE_HEIGHT + PARALLEL_GROUP_ROW_GAP),
+          },
+        ];
+      }),
+    ),
+    width,
+    height,
+  };
+}
+
+function parallelGroupId(upstreamTaskId: string) {
+  return `parallel:${upstreamTaskId}`;
+}
+
+function mapGroupsByTaskId(parallelGroups: ParallelTaskGroup[]) {
+  const groupByTaskId = new Map<string, ParallelTaskGroup>();
+
+  for (const group of parallelGroups) {
+    for (const taskId of group.taskIds) {
+      groupByTaskId.set(taskId, group);
+    }
+  }
+
+  return groupByTaskId;
+}
+
+function buildOuterLayoutNodes(
+  tasks: Task[],
+  parallelGroups: ParallelTaskGroup[],
+  parallelGroupByTaskId: Map<string, ParallelTaskGroup>,
+) {
+  return [
+    ...parallelGroups.map((group) => ({
+      id: group.id,
+      width: group.width,
+      height: group.height,
+    })),
+    ...tasks
+      .filter((task) => !parallelGroupByTaskId.has(task.spec_id))
+      .map((task) => ({
+        id: task.spec_id,
+        width: TASK_NODE_WIDTH,
+        height: TASK_NODE_HEIGHT,
+      })),
+  ];
+}
+
+function buildOuterLayoutEdges(
+  tasks: Task[],
+  upstreamByTaskId: Map<string, string[]>,
+  parallelGroupByTaskId: Map<string, ParallelTaskGroup>,
+) {
+  const edges = new Map<string, OuterLayoutEdge>();
+
+  for (const task of tasks) {
+    const target = parallelGroupByTaskId.get(task.spec_id)?.id ?? task.spec_id;
+
+    for (const dependencyId of upstreamByTaskId.get(task.spec_id) ?? []) {
+      const source = parallelGroupByTaskId.get(dependencyId)?.id ?? dependencyId;
+
+      if (source === target) {
+        continue;
+      }
+
+      edges.set(`${source}->${target}`, { source, target });
+    }
+  }
+
+  return Array.from(edges.values());
+}
+
+function buildFlowGraphNodes(
+  tasks: Task[],
+  parallelGroups: ParallelTaskGroup[],
+  parallelGroupByTaskId: Map<string, ParallelTaskGroup>,
+  layoutByOuterNodeId: Map<string, { x: number; y: number }>,
+) {
+  const groupNodes = parallelGroups.map(
+    (group) =>
+      ({
+        id: group.id,
+        type: "taskGroup",
+        data: {
+          label: group.label,
+          taskIds: group.taskIds,
+          upstreamTaskId: group.upstreamTaskId,
+          width: group.width,
+          height: group.height,
+        },
+        position: layoutByOuterNodeId.get(group.id) ?? { x: 0, y: 0 },
+        targetPosition: Position.Left,
+        sourcePosition: Position.Right,
+        width: group.width,
+        height: group.height,
+        style: `width: ${group.width}px; height: ${group.height}px;`,
+        ariaLabel: group.label,
+        zIndex: 0,
+      }) satisfies TaskFlowNode,
+  );
+
+  const taskNodes = tasks.map((task) => {
+    const group = parallelGroupByTaskId.get(task.spec_id);
+
+    return {
+      id: task.spec_id,
+      type: "task",
+      data: { task },
+      position: group
+        ? (group.childPositions.get(task.spec_id) ?? { x: 0, y: 0 })
+        : (layoutByOuterNodeId.get(task.spec_id) ?? { x: 0, y: 0 }),
+      parentId: group?.id,
+      extent: group ? ("parent" as const) : undefined,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      ariaLabel: `${task.label} Task`,
+      zIndex: group ? 2 : 1,
+    } satisfies TaskFlowNode;
+  });
+
+  return [...groupNodes, ...taskNodes];
+}
+
+function buildFlowGraphEdges(
+  tasks: Task[],
+  upstreamByTaskId: Map<string, string[]>,
+  parallelGroupByTaskId: Map<string, ParallelTaskGroup>,
+  parallelGroups: ParallelTaskGroup[],
+) {
+  const groupsById = new Map(parallelGroups.map((group) => [group.id, group]));
+  const edges = new Map<string, TaskFlowEdge>();
+
+  for (const task of tasks) {
+    for (const dependencyId of upstreamByTaskId.get(task.spec_id) ?? []) {
+      const targetGroup = parallelGroupByTaskId.get(task.spec_id);
+      const sourceGroup = parallelGroupByTaskId.get(dependencyId);
+
+      if (targetGroup && sourceGroup?.id === targetGroup.id) {
+        continue;
+      }
+
+      const source = dependencyId;
+      const target = targetGroup?.upstreamTaskId === dependencyId ? targetGroup.id : task.spec_id;
+      const targetTaskIds = groupsById.get(target)?.taskIds ?? [task.spec_id];
+      const id = `${source}->${target}`;
+
+      edges.set(id, {
+        id,
+        type: "default" as const,
+        source,
+        target,
+        data: {
+          sourceTaskIds: [dependencyId],
+          targetTaskIds,
+        },
+        ariaLabel: `${dependencyId} must finish before ${targetTaskIds.join(", ")}`,
+      });
+    }
+  }
+
+  return Array.from(edges.values());
+}
+
+function buildDagreLayout(nodes: OuterLayoutNode[], edges: OuterLayoutEdge[]) {
+  const dagreGraph = new graphlib.Graph()
+    .setDefaultEdgeLabel(() => ({}))
+    .setGraph({
+      rankdir: "LR",
+      ranksep: TASK_NODE_RANK_SEPARATION,
+      nodesep: TASK_NODE_SEPARATION,
+      edgesep: 36,
+    });
+
+  for (const node of nodes) {
+    dagreGraph.setNode(node.id, {
+      width: node.width,
+      height: node.height,
+    });
+  }
+
+  for (const edge of edges) {
+    dagreGraph.setEdge(edge.source, edge.target);
+  }
+
+  layout(dagreGraph);
+
+  const positions = nodes.map((layoutNode) => {
+    const node = dagreGraph.node(layoutNode.id);
+    return {
+      id: layoutNode.id,
+      x: node.x - layoutNode.width / 2,
+      y: node.y - layoutNode.height / 2,
+    };
+  });
+
+  const minX = Math.min(0, ...positions.map((position) => position.x));
+  const minY = Math.min(0, ...positions.map((position) => position.y));
+
+  return new Map(
+    positions.map((position) => [
+      position.id,
+      {
+        x: position.x - minX,
+        y: position.y - minY,
+      },
+    ]),
+  );
 }
 
 function stableUnique(values: string[]) {
