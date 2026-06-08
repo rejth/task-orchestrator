@@ -23,6 +23,8 @@ __pycache__/
 
 # misc
 dump/
+.agents/
+.claude/
 
 /node_modules
 **/node_modules/
