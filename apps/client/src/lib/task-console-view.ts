@@ -1,9 +1,12 @@
 import { MarkerType, type Node } from "@xyflow/svelte";
 import type { JournalEntry, Launch, Task } from "./api";
+import type { TaskGroupNodeViewData } from "./TaskGroupNode.svelte";
 import type { TaskNodeViewData } from "./TaskNode.svelte";
-import type { MissingDependency, TaskFlowEdge, TaskGraph } from "./task-graph";
+import type { MissingDependency, TaskFlowEdge, TaskFlowNode, TaskGraph } from "./task-graph";
 
-export type TaskViewNode = Node<TaskNodeViewData, "task">;
+export type TaskViewNode =
+  | Node<TaskNodeViewData, "task">
+  | Node<TaskGroupNodeViewData, "taskGroup">;
 
 export type SelectedJournal = {
   taskLabel: string;
@@ -102,7 +105,42 @@ export function buildFlowNodes(
   upstreamTaskIds: Set<string>,
   downstreamTaskIds: Set<string>,
 ) {
-  return graph.nodes.map((node) => ({
+  return graph.nodes.map((node) =>
+    buildFlowNode(node, selectedTaskId, upstreamTaskIds, downstreamTaskIds),
+  ) satisfies TaskViewNode[];
+}
+
+function buildFlowNode(
+  node: TaskFlowNode,
+  selectedTaskId: string,
+  upstreamTaskIds: Set<string>,
+  downstreamTaskIds: Set<string>,
+) {
+  if (node.type === "taskGroup") {
+    return {
+      ...node,
+      class: taskGroupNodeClass(
+        node.data.taskIds,
+        selectedTaskId,
+        upstreamTaskIds,
+        downstreamTaskIds,
+      ),
+      data: {
+        ...node.data,
+        selectionRole: taskGroupSelectionRole(
+          node.data.taskIds,
+          selectedTaskId,
+          upstreamTaskIds,
+          downstreamTaskIds,
+        ),
+      },
+      domAttributes: {
+        "data-testid": `task-group-${node.id}`,
+      },
+    };
+  }
+
+  return {
     ...node,
     class: taskNodeClass(node.id, selectedTaskId, upstreamTaskIds, downstreamTaskIds),
     ariaLabel: `${node.data.task.label} Task`,
@@ -114,7 +152,7 @@ export function buildFlowNodes(
     domAttributes: {
       "data-testid": `task-node-${node.id}`,
     },
-  })) satisfies TaskViewNode[];
+  };
 }
 
 export function buildFlowEdges(
@@ -177,7 +215,7 @@ export function taskNodeClass(
 }
 
 export function edgeClass(
-  edge: Pick<TaskFlowEdge, "source" | "target">,
+  edge: Pick<TaskFlowEdge, "source" | "target" | "data">,
   selectedTaskId: string,
   upstreamTaskIds: Set<string>,
   downstreamTaskIds: Set<string>,
@@ -186,12 +224,16 @@ export function edgeClass(
     return "task-flow-edge";
   }
 
+  const sourceTaskIds = edge.data?.sourceTaskIds ?? [edge.source];
+  const targetTaskIds = edge.data?.targetTaskIds ?? [edge.target];
   const isUpstreamEdge =
-    (edge.target === selectedTaskId || upstreamTaskIds.has(edge.target)) &&
-    upstreamTaskIds.has(edge.source);
+    targetTaskIds.some(
+      (targetTaskId) => targetTaskId === selectedTaskId || upstreamTaskIds.has(targetTaskId),
+    ) && sourceTaskIds.some((sourceTaskId) => upstreamTaskIds.has(sourceTaskId));
   const isDownstreamEdge =
-    (edge.source === selectedTaskId || downstreamTaskIds.has(edge.source)) &&
-    downstreamTaskIds.has(edge.target);
+    sourceTaskIds.some(
+      (sourceTaskId) => sourceTaskId === selectedTaskId || downstreamTaskIds.has(sourceTaskId),
+    ) && targetTaskIds.some((targetTaskId) => downstreamTaskIds.has(targetTaskId));
 
   if (isUpstreamEdge) {
     return "task-flow-edge task-flow-edge-upstream";
@@ -202,6 +244,45 @@ export function edgeClass(
   }
 
   return "task-flow-edge task-flow-edge-muted";
+}
+
+function taskGroupSelectionRole(
+  taskIds: string[],
+  selectedTaskId: string,
+  upstreamTaskIds: Set<string>,
+  downstreamTaskIds: Set<string>,
+): TaskGroupNodeViewData["selectionRole"] {
+  if (!selectedTaskId) {
+    return "neutral";
+  }
+
+  if (taskIds.includes(selectedTaskId)) {
+    return "selected";
+  }
+
+  if (taskIds.some((taskId) => upstreamTaskIds.has(taskId))) {
+    return "upstream";
+  }
+
+  if (taskIds.some((taskId) => downstreamTaskIds.has(taskId))) {
+    return "downstream";
+  }
+
+  return "neutral";
+}
+
+function taskGroupNodeClass(
+  taskIds: string[],
+  selectedTaskId: string,
+  upstreamTaskIds: Set<string>,
+  downstreamTaskIds: Set<string>,
+) {
+  const role = taskGroupSelectionRole(taskIds, selectedTaskId, upstreamTaskIds, downstreamTaskIds);
+  if (role !== "neutral") {
+    return `task-flow-group task-flow-group-${role}`;
+  }
+
+  return selectedTaskId ? "task-flow-group task-flow-group-muted" : "task-flow-group";
 }
 
 export function edgeColor(edgeClassName: string) {
