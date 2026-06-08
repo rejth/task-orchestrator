@@ -54,7 +54,9 @@ let { controller }: Props = $props();
       side="right"
       showCloseButton={false}
       showOverlay={false}
-      interactOutsideBehavior="defer-otherwise-ignore"
+      interactOutsideBehavior="ignore"
+      preventScroll={false}
+      trapFocus={false}
     >
       {#if controller.selectedTask}
       <TaskInspector
