@@ -1,36 +1,21 @@
-# Task specification DAG for the report generation pipeline.
+# Demo Task specification DAG for the report generation pipeline.
 # Each entry defines: id, label, description, depends_on (list of task IDs).
-# Deprecated tasks are excluded — they exist in the enum for DB back-compat only.
+# Deprecated or visually noisy tasks are omitted from this demo graph; their enum
+# values remain available for database back-compat.
 #
-# Execution phases (high level):
-#   1. Root tasks          — no dependencies, start immediately
-#   2. Genomic data reload — parallel, all depend on RELOAD_PATIENT_DATA
-#   3. Treatment matching  — depends on patient + genomic data
-#   4. Clinical evidence   — depends on treatments + external pull
-#   5. Export              — transforms each domain into output format
-#   6. Push                — sends exported data to external systems
-#   7. REFRESH_INDEXES     — finalises after all pushes
+# Demo shape:
+#   1. Load patient context and external sources.
+#   2. Reload three genomic data sets in parallel.
+#   3. Join genomic data into treatment matching.
+#   4. Export therapy, genomics, evidence, and trials.
+#   5. Push the exported outputs.
+#   6. Refresh indexes after all pushed outputs complete.
 
-# ── root tasks ────────────────────────────────────────────────────────────────
+# root tasks
 
 - id: RELOAD_PATIENT_DATA
   label: Reload Patient Data
   description: Load core patient record from the source database.
-  depends_on: []
-
-- id: RELOAD_PATIENT_PARAMETERS
-  label: Reload Patient Parameters
-  description: Load patient-level report parameters.
-  depends_on: []
-
-- id: RELOAD_REPORT_PARAMETERS
-  label: Reload Report Parameters
-  description: Load report configuration and settings.
-  depends_on: []
-
-- id: SET_REPORT_VERSION
-  label: Set Report Version
-  description: Assign the current version tag to this report.
   depends_on: []
 
 - id: PULL_CLINICAL_EVIDENCE
@@ -43,12 +28,7 @@
   description: Fetch active recruiting clinical trial data from external source.
   depends_on: []
 
-# ── genomic data reload (parallel, all depend on RELOAD_PATIENT_DATA) ─────────
-
-- id: RELOAD_HLA_ALLELES
-  label: Reload HLA Alleles
-  description: Load HLA allele data for the patient.
-  depends_on: [RELOAD_PATIENT_DATA]
+# genomic reloads
 
 - id: RELOAD_SOMATIC_MUTATIONS
   label: Reload Somatic Mutations
@@ -60,133 +40,39 @@
   description: Load germline mutation calls for the patient.
   depends_on: [RELOAD_PATIENT_DATA]
 
-- id: RELOAD_FUSIONS
-  label: Reload Fusions
-  description: Load gene fusion events for the patient.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_CELL_POPULATIONS
-  label: Reload Cell Populations
-  description: Load tumour cell population data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
 - id: RELOAD_COPY_NUMBER_ALTERATIONS
   label: Reload Copy Number Alterations
   description: Load gene-level copy number alteration data.
   depends_on: [RELOAD_PATIENT_DATA]
 
-- id: RELOAD_SEGMENT_COPY_NUMBER_ALTERATIONS
-  label: Reload Segment Copy Number Alterations
-  description: Load segment-level copy number alteration data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_EXON_COPY_NUMBER_ALTERATIONS
-  label: Reload Exon Copy Number Alterations
-  description: Load exon-level copy number alteration data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_LOH_COPY_NUMBER_ALTERATIONS
-  label: Reload LOH Copy Number Alterations
-  description: Load loss-of-heterozygosity copy number data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_MALIGNANT_CELL_CLONES
-  label: Reload Malignant Cell Clones
-  description: Load malignant cell clone data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_GENE_EXPRESSIONS
-  label: Reload Gene Expressions
-  description: Load gene expression profile for the patient.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_REARRANGEMENTS
-  label: Reload Rearrangements
-  description: Load chromosomal rearrangement data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_GENESETS
-  label: Reload Gene Sets
-  description: Load curated gene set assignments.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_ORDER_SUMMARY
-  label: Reload Order Summary
-  description: Load test order summary data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_SIGNALING_BIOMARKERS
-  label: Reload Signaling Biomarkers
-  description: Load signaling pathway biomarker data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_ASTRAEA_PREDICTIVE_BIOMARKERS
-  label: Reload Astraea Predictive Biomarkers
-  description: Load Astraea-computed predictive biomarker scores.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_BIOLOGICAL_PROCESSES
-  label: Reload Biological Processes
-  description: Load biological process activity data.
-  depends_on: [RELOAD_PATIENT_DATA]
-
-- id: RELOAD_COMPLEX_MEASURES
-  label: Reload Complex Measures
-  description: Load composite genomic complexity measures (TMB, MSI, etc.).
-  depends_on: [RELOAD_PATIENT_DATA]
-
-# ── treatment matching ────────────────────────────────────────────────────────
+# treatment matching
 
 - id: RELOAD_MATCHED_TREATMENTS
   label: Reload Matched Treatments
   description: Match treatments against the patient's genomic alterations.
   depends_on:
-    - RELOAD_PATIENT_DATA
     - RELOAD_SOMATIC_MUTATIONS
     - RELOAD_GERMLINE_MUTATIONS
     - RELOAD_COPY_NUMBER_ALTERATIONS
-    - RELOAD_FUSIONS
 
 - id: CREATE_TREATMENT_SETTINGS
   label: Create Treatment Settings
   description: Initialise treatment-level display and filtering settings.
   depends_on: [RELOAD_MATCHED_TREATMENTS]
 
-- id: RELOAD_MATCHED_CONTRAINDICATIONS
-  label: Reload Matched Contraindications
-  description: Match contraindications against the patient's profile.
-  depends_on: [RELOAD_MATCHED_TREATMENTS]
-
-# ── clinical evidence ─────────────────────────────────────────────────────────
-
-- id: RELOAD_NCCN_CLINICAL_EVIDENCE
-  label: Reload NCCN Clinical Evidence
-  description: Load NCCN guideline evidence matched to treatments.
-  depends_on: [RELOAD_MATCHED_TREATMENTS, PULL_CLINICAL_EVIDENCE]
-
-- id: RELOAD_INVESTIGATIONAL_CLINICAL_EVIDENCE
-  label: Reload Investigational Clinical Evidence
-  description: Load investigational/off-label evidence matched to treatments.
-  depends_on: [RELOAD_MATCHED_TREATMENTS, PULL_CLINICAL_EVIDENCE]
-
-# ── clinical trials ───────────────────────────────────────────────────────────
+# clinical trials
 
 - id: CLINICAL_TRIALS_MATCHING
   label: Clinical Trials Matching
   description: Match recruiting clinical trials to the patient's profile.
   depends_on: [RELOAD_PATIENT_DATA, PULL_RECRUITING_TRIALS]
 
-# ── export ────────────────────────────────────────────────────────────────────
-
-- id: EXPORT_PATIENT_PARAMETERS
-  label: Export Patient Parameters
-  description: Serialise patient parameters into report output format.
-  depends_on: [RELOAD_PATIENT_PARAMETERS]
+# exports
 
 - id: EXPORT_TREATMENTS
   label: Export Treatments
   description: Serialise matched treatments into report output format.
-  depends_on: [RELOAD_MATCHED_TREATMENTS, CREATE_TREATMENT_SETTINGS]
+  depends_on: [RELOAD_MATCHED_TREATMENTS]
 
 - id: EXPORT_TREATMENT_SETTINGS
   label: Export Treatment Settings
@@ -198,21 +84,6 @@
   description: Build the therapy node tree from treatments and settings.
   depends_on: [EXPORT_TREATMENTS, EXPORT_TREATMENT_SETTINGS]
 
-- id: EXPORT_RECRUITING_TRIALS
-  label: Export Recruiting Trials
-  description: Serialise matched recruiting trials into report output format.
-  depends_on: [CLINICAL_TRIALS_MATCHING]
-
-- id: EXPORT_CLINICAL_EVIDENCE
-  label: Export Clinical Evidence
-  description: Serialise NCCN and investigational evidence into report output format.
-  depends_on: [RELOAD_NCCN_CLINICAL_EVIDENCE, RELOAD_INVESTIGATIONAL_CLINICAL_EVIDENCE]
-
-- id: EXPORT_CONTRAINDICATIONS
-  label: Export Contraindications
-  description: Serialise matched contraindications into report output format.
-  depends_on: [RELOAD_MATCHED_CONTRAINDICATIONS]
-
 - id: EXPORT_SOMATIC_MUTATIONS
   label: Export Somatic Mutations
   description: Serialise somatic mutations into report output format.
@@ -223,114 +94,27 @@
   description: Serialise germline mutations into report output format.
   depends_on: [RELOAD_GERMLINE_MUTATIONS]
 
-- id: EXPORT_HLA_ALLELES
-  label: Export HLA Alleles
-  description: Serialise HLA allele data into report output format.
-  depends_on: [RELOAD_HLA_ALLELES]
-
-- id: EXPORT_SEGMENT_COPY_NUMBER_ALTERATIONS
-  label: Export Segment Copy Number Alterations
-  description: Serialise segment-level CNA data into report output format.
-  depends_on: [RELOAD_SEGMENT_COPY_NUMBER_ALTERATIONS]
-
-- id: EXPORT_EXON_COPY_NUMBER_ALTERATIONS
-  label: Export Exon Copy Number Alterations
-  description: Serialise exon-level CNA data into report output format.
-  depends_on: [RELOAD_EXON_COPY_NUMBER_ALTERATIONS]
-
-- id: EXPORT_LOH_COPY_NUMBER_ALTERATIONS
-  label: Export LOH Copy Number Alterations
-  description: Serialise LOH data into report output format.
-  depends_on: [RELOAD_LOH_COPY_NUMBER_ALTERATIONS]
-
-- id: EXPORT_CE_PRESETS
-  label: Export CE Presets
-  description: Export clinical evidence preset configurations.
-  depends_on: [RELOAD_MATCHED_TREATMENTS]
-
-- id: EXPORT_OCT_PRESETS
-  label: Export OCT Presets
-  description: Export off-clinical-trial preset configurations.
-  depends_on: [RELOAD_MATCHED_TREATMENTS]
-
-- id: EXPORT_REARRANGEMENTS
-  label: Export Rearrangements
-  description: Serialise chromosomal rearrangement data into report output format.
-  depends_on: [RELOAD_REARRANGEMENTS]
-
-- id: EXPORT_FUSIONS
-  label: Export Fusions
-  description: Serialise gene fusion data into report output format.
-  depends_on: [RELOAD_FUSIONS]
-
-- id: EXPORT_GENESETS
-  label: Export Gene Sets
-  description: Serialise gene set data into report output format.
-  depends_on: [RELOAD_GENESETS]
-
-- id: EXPORT_BIOLOGICAL_PROCESSES
-  label: Export Biological Processes
-  description: Serialise biological process data into report output format.
-  depends_on: [RELOAD_BIOLOGICAL_PROCESSES]
-
-- id: EXPORT_CELL_POPULATIONS
-  label: Export Cell Populations
-  description: Serialise cell population data into report output format.
-  depends_on: [RELOAD_CELL_POPULATIONS]
-
 - id: EXPORT_COPY_NUMBER_ALTERATIONS
   label: Export Copy Number Alterations
   description: Serialise gene-level CNA data into report output format.
   depends_on: [RELOAD_COPY_NUMBER_ALTERATIONS]
 
-- id: EXPORT_GENE_EXPRESSIONS
-  label: Export Gene Expressions
-  description: Serialise gene expression data into report output format.
-  depends_on: [RELOAD_GENE_EXPRESSIONS]
+- id: EXPORT_CLINICAL_EVIDENCE
+  label: Export Clinical Evidence
+  description: Serialise matched clinical evidence into report output format.
+  depends_on: [RELOAD_MATCHED_TREATMENTS, PULL_CLINICAL_EVIDENCE]
 
-- id: EXPORT_COMPLEX_MEASURES
-  label: Export Complex Measures
-  description: Serialise TMB/MSI and other complex measures into report output format.
-  depends_on: [RELOAD_COMPLEX_MEASURES]
+- id: EXPORT_RECRUITING_TRIALS
+  label: Export Recruiting Trials
+  description: Serialise matched recruiting trials into report output format.
+  depends_on: [CLINICAL_TRIALS_MATCHING]
 
-- id: EXPORT_SUPERBIOMARKERS
-  label: Export Superbiomarkers
-  description: Serialise superbiomarker data into report output format.
-  depends_on: [RELOAD_SIGNALING_BIOMARKERS]
+# push
 
-- id: EXPORT_SIGNALING_BIOMARKERS
-  label: Export Signaling Biomarkers
-  description: Serialise signaling biomarker data into report output format.
-  depends_on: [RELOAD_SIGNALING_BIOMARKERS]
-
-# ── sync ──────────────────────────────────────────────────────────────────────
-
-- id: SYNC_OCT_TREATMENTS
-  label: Sync OCT Treatments
-  description: Synchronise off-clinical-trial treatments with the external system.
-  depends_on: [EXPORT_OCT_PRESETS]
-
-# ── push ──────────────────────────────────────────────────────────────────────
-
-- id: PUSH_MATCHED_TREATMENTS
-  label: Push Matched Treatments
-  description: Send matched treatment data to the external report system.
-  depends_on: [EXPORT_TREATMENTS]
-
-- id: PUSH_TREATMENT_SETTINGS
-  label: Push Treatment Settings
-  description: Send treatment settings to the external report system.
-  depends_on: [EXPORT_TREATMENT_SETTINGS]
-
-- id: PUSH_SIGNALING_BIOMARKERS
-  label: Push Signaling Biomarkers
-  description: Send signaling biomarker data to the external report system.
-  depends_on: [EXPORT_SIGNALING_BIOMARKERS]
-
-- id: PUSH_MATCHED_CONTRAINDICATIONS
-  label: Push Matched Contraindications
-  description: Send contraindication data to the external report system.
-  depends_on: [EXPORT_CONTRAINDICATIONS]
+- id: PUSH_THERAPY_NODE
+  label: Push Therapy Node
+  description: Send therapy node tree to the external report system.
+  depends_on: [EXPORT_THERAPY_NODE]
 
 - id: PUSH_SOMATIC_MUTATIONS
   label: Push Somatic Mutations
@@ -342,77 +126,30 @@
   description: Send germline mutation data to the external report system.
   depends_on: [EXPORT_GERMLINE_MUTATIONS]
 
-- id: PUSH_REARRANGEMENTS
-  label: Push Rearrangements
-  description: Send chromosomal rearrangement data to the external report system.
-  depends_on: [EXPORT_REARRANGEMENTS]
-
-- id: PUSH_FUSIONS
-  label: Push Fusions
-  description: Send gene fusion data to the external report system.
-  depends_on: [EXPORT_FUSIONS]
-
-- id: PUSH_GENESETS
-  label: Push Gene Sets
-  description: Send gene set data to the external report system.
-  depends_on: [EXPORT_GENESETS]
-
 - id: PUSH_COPY_NUMBER_ALTERATIONS
   label: Push Copy Number Alterations
   description: Send CNA data to the external report system.
   depends_on: [EXPORT_COPY_NUMBER_ALTERATIONS]
-
-- id: PUSH_GENE_EXPRESSIONS
-  label: Push Gene Expressions
-  description: Send gene expression data to the external report system.
-  depends_on: [EXPORT_GENE_EXPRESSIONS]
-
-- id: PUSH_COMPLEX_MEASURES
-  label: Push Complex Measures
-  description: Send complex measure data to the external report system.
-  depends_on: [EXPORT_COMPLEX_MEASURES]
 
 - id: PUSH_CLINICAL_EVIDENCE
   label: Push Clinical Evidence
   description: Send clinical evidence data to the external report system.
   depends_on: [EXPORT_CLINICAL_EVIDENCE]
 
-- id: PUSH_SUPERBIOMARKERS
-  label: Push Superbiomarkers
-  description: Send superbiomarker data to the external report system.
-  depends_on: [EXPORT_SUPERBIOMARKERS]
-
 - id: PUSH_CLINICAL_TRIALS
   label: Push Clinical Trials
   description: Send matched clinical trial data to the external report system.
   depends_on: [EXPORT_RECRUITING_TRIALS]
 
-- id: PUSH_THERAPY_NODE
-  label: Push Therapy Node
-  description: Send therapy node tree to the external report system.
-  depends_on: [EXPORT_THERAPY_NODE]
-
-# ── finalise ──────────────────────────────────────────────────────────────────
+# finalise
 
 - id: REFRESH_INDEXES
   label: Refresh Indexes
   description: Rebuild search and display indexes after all data has been pushed.
   depends_on:
-    - EXPORT_PATIENT_PARAMETERS
-    - PUSH_MATCHED_TREATMENTS
-    - PUSH_TREATMENT_SETTINGS
-    - PUSH_SIGNALING_BIOMARKERS
-    - PUSH_MATCHED_CONTRAINDICATIONS
+    - PUSH_THERAPY_NODE
     - PUSH_SOMATIC_MUTATIONS
     - PUSH_GERMLINE_MUTATIONS
-    - PUSH_REARRANGEMENTS
-    - PUSH_FUSIONS
-    - PUSH_GENESETS
     - PUSH_COPY_NUMBER_ALTERATIONS
-    - PUSH_GENE_EXPRESSIONS
-    - PUSH_COMPLEX_MEASURES
     - PUSH_CLINICAL_EVIDENCE
-    - PUSH_SUPERBIOMARKERS
     - PUSH_CLINICAL_TRIALS
-    - PUSH_THERAPY_NODE
-    - SYNC_OCT_TREATMENTS

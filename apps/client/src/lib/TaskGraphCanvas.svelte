@@ -7,6 +7,7 @@ import {
   Panel,
   SvelteFlow,
 } from "@xyflow/svelte";
+import TaskGroupNode from "./TaskGroupNode.svelte";
 import TaskNode from "./TaskNode.svelte";
 import type { TaskConsoleController } from "./task-console.svelte";
 import { TASK_GRAPH_FIT_VIEW_OPTIONS, type TaskViewNode } from "./task-console-view";
@@ -16,7 +17,7 @@ interface Props {
   controller: TaskConsoleController;
 }
 
-const nodeTypes = { task: TaskNode } satisfies NodeTypes;
+const nodeTypes = { task: TaskNode, taskGroup: TaskGroupNode } satisfies NodeTypes;
 
 let { controller }: Props = $props();
 
@@ -43,7 +44,11 @@ $effect(() => {
     minZoom={0.35}
     maxZoom={1.4}
     proOptions={{ hideAttribution: true }}
-    onnodeclick={({ node }) => controller.selectTask(node.id)}
+    onnodeclick={({ node }) => {
+      if (node.type === "task") {
+        controller.selectTask(node.id);
+      }
+    }}
   >
     <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
     <Controls fitViewOptions={TASK_GRAPH_FIT_VIEW_OPTIONS} />
@@ -65,8 +70,12 @@ $effect(() => {
     background: #f8fafb;
   }
 
-  .task-graph :global(.svelte-flow__node) {
+  .task-graph :global(.task-flow-node) {
     width: 300px;
+  }
+
+  .task-graph :global(.task-flow-group) {
+    pointer-events: all;
   }
 
   .task-graph :global(.svelte-flow__edge-path) {
@@ -95,12 +104,49 @@ $effect(() => {
   }
 
   :global(.task-flow-node-upstream),
-  :global(.task-flow-node-downstream) {
+  :global(.task-flow-node-downstream),
+  :global(.task-flow-group-upstream),
+  :global(.task-flow-group-downstream) {
     z-index: 3;
   }
 
-  :global(.task-flow-node-selected) {
+  :global(.task-flow-node-selected),
+  :global(.task-flow-group-selected) {
     z-index: 4;
+  }
+
+  :global(.task-flow-group-selected .task-group-node) {
+    border-color: #08717c;
+    background: rgba(232, 251, 253, 0.78);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.76),
+      0 0 0 4px rgba(8, 113, 124, 0.16),
+      0 18px 42px rgba(8, 113, 124, 0.16);
+  }
+
+  :global(.task-flow-group-upstream .task-group-node) {
+    border-color: #d6aa30;
+    background: rgba(255, 250, 240, 0.84);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.76),
+      0 0 0 3px rgba(214, 170, 48, 0.16),
+      0 14px 32px rgba(155, 106, 0, 0.1);
+  }
+
+  :global(.task-flow-group-downstream .task-group-node) {
+    border-color: #08717c;
+    background: rgba(240, 251, 252, 0.82);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.76),
+      0 0 0 3px rgba(8, 113, 124, 0.14),
+      0 14px 32px rgba(8, 113, 124, 0.11);
+  }
+
+  :global(.task-flow-group-muted .task-group-node) {
+    border-color: #dfe6e8;
+    opacity: 0.3;
+    filter: grayscale(0.75);
+    box-shadow: none;
   }
 
   :global(.task-flow-node-selected .task-node) {
