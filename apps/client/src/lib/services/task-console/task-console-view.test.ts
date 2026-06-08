@@ -90,4 +90,29 @@ describe("task console graph view model", () => {
       markerEnd: expect.objectContaining({ color: "#d6aa30" }),
     });
   });
+
+  it("marks outgoing edges from pending tasks as dashed", () => {
+    const graph = buildTaskGraph([
+      taskResponse({ spec_id: "FETCH_RAW_DATA", label: "Fetch raw data", status: "PENDING" }),
+      taskResponse({
+        spec_id: "TRANSFORM_DATA",
+        label: "Transform data",
+        depends_on: ["FETCH_RAW_DATA"],
+      }),
+      taskResponse({
+        spec_id: "LOAD_RESULTS",
+        label: "Load results",
+        depends_on: ["TRANSFORM_DATA"],
+      }),
+    ]);
+
+    const edges = buildFlowEdges(graph, "", new Set(), new Set());
+
+    expect(edges.find((edge) => edge.id === "FETCH_RAW_DATA->TRANSFORM_DATA")).toMatchObject({
+      class: "task-flow-edge task-flow-edge-pending-source",
+    });
+    expect(edges.find((edge) => edge.id === "TRANSFORM_DATA->LOAD_RESULTS")).toMatchObject({
+      class: "task-flow-edge",
+    });
+  });
 });

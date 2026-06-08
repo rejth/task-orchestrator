@@ -55,6 +55,7 @@ $effect(() => {
         controller.selectTask(node.id);
       }
     }}
+    onpaneclick={() => controller.closeInspector()}
   >
     <TaskGraphAutoFit {fitKey} />
     <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
@@ -102,6 +103,11 @@ $effect(() => {
   .task-graph :global(.task-flow-edge-downstream .svelte-flow__edge-path) {
     stroke: #08717c;
     stroke-width: 4;
+  }
+
+  .task-graph :global(.task-flow-edge-pending-source .svelte-flow__edge-path) {
+    stroke-dasharray: 8 7;
+    animation: pending-edge-dash 0.9s linear infinite;
   }
 
   .task-graph :global(.svelte-flow__controls) {
@@ -198,5 +204,11 @@ $effect(() => {
     padding: 6px;
     background: color-mix(in oklab, var(--card) 94%, transparent);
     box-shadow: var(--shadow-md);
+  }
+
+  @keyframes pending-edge-dash {
+    to {
+      stroke-dashoffset: -15;
+    }
   }
 </style>

@@ -38,13 +38,11 @@ let {
   directDependents,
   downstreamImpactTasks,
   isLoading,
-  loadingJournalId,
   onAbortLaunch,
   onClose,
   onCloseJournal,
   onLoadJournal,
   onSchedule,
-  schedulingTaskId,
   selectedJournal,
   selectedLaunchSummary,
   selectedTask,
@@ -255,7 +253,7 @@ function launchCardClass(summary: LaunchSummary | undefined) {
 
         {#if selectedJournal.entries.length === 0}
           <p class="m-0 rounded-md border border-dashed p-5 text-center text-muted-foreground">
-            This Launch does not have Journal entries yet.
+            This Launch does not have Journal yet.
           </p>
         {:else}
           <ol class="grid gap-2 p-0">

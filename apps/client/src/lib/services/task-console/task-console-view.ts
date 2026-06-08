@@ -161,8 +161,17 @@ export function buildFlowEdges(
   upstreamTaskIds: Set<string>,
   downstreamTaskIds: Set<string>,
 ) {
+  const taskById = new Map(
+    graph.nodes.filter((node) => node.type === "task").map((node) => [node.id, node.data.task]),
+  );
+
   return graph.edges.map((edge) => {
-    const edgeClassName = edgeClass(edge, selectedTaskId, upstreamTaskIds, downstreamTaskIds);
+    const edgeClassName = [
+      edgeClass(edge, selectedTaskId, upstreamTaskIds, downstreamTaskIds),
+      hasPendingSourceTask(edge, taskById) ? "task-flow-edge-pending-source" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return {
       ...edge,
@@ -173,6 +182,12 @@ export function buildFlowEdges(
       },
     };
   });
+}
+
+function hasPendingSourceTask(edge: TaskFlowEdge, taskById: Map<string, Task>) {
+  return (edge.data?.sourceTaskIds ?? [edge.source]).some(
+    (taskId) => taskById.get(taskId)?.status === "PENDING",
+  );
 }
 
 export function taskSelectionRole(
