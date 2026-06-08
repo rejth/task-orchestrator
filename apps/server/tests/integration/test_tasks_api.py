@@ -4,7 +4,7 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-TASK_COUNT = 73  # non-deprecated tasks in task_specifications.yml
+TASK_COUNT = 24  # active demo tasks in task_specifications.yml
 API_PREFIX = "/api"
 
 
