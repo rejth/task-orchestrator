@@ -6,6 +6,8 @@ Each **Scope** owns a **Job** — a directed acyclic graph of **Tasks**. Schedul
 
 This is a reference project and the codebase can be used as a template or boilerplate for a Python task orchestrator, or as a starting point for a Svelte web app that needs a server-backed task orchestration UI.
 
+<img width="1718" height="926" alt="image" src="https://github.com/user-attachments/assets/c4d4a1c7-1eaf-4496-8e77-9dbbf13ddcf5" />
+
 ## Stack
 
 Python 3.13 · FastAPI · PostgreSQL · SQLAlchemy 2 · Alembic · Celery · Redis · TypeScript · Svelte 5 · Docker
