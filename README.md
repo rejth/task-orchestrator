@@ -2,9 +2,9 @@
 
 DAG-based task executor with dependency-aware scheduling, parallel task execution, explicit task state transitions, cascade failure handling, and Celery dispatch.
 
-This is a reference project and the codebase can be used as a template or boilerplate for a Python task orchestrator, or as a starting point for a Svelte web app that needs a server-backed task orchestration UI.
-
 Each **Scope** owns a **Job** — a directed acyclic graph of **Tasks**. Scheduling a task marks it and all downstream tasks for (re-)execution. Tasks execute in parallel where dependencies allow. See [CONTEXT.md](CONTEXT.md) for the domain glossary.
+
+This is a reference project and the codebase can be used as a template or boilerplate for a Python task orchestrator, or as a starting point for a Svelte web app that needs a server-backed task orchestration UI.
 
 ## Stack
 
