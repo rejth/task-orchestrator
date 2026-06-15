@@ -168,14 +168,22 @@ class TasksManagementService:
             except Exception:
                 logger.warning("Failed to revoke Celery task %s — worker may still execute", launch_id, exc_info=True)
 
-    def dispatch_successors(self, successors: list[ScheduledScopedTask], scope_id: str, user: str) -> None:
+    def dispatch_successors(
+        self,
+        successors: list[ScheduledScopedTask],
+        scope_id: str,
+        user: str,
+    ) -> None:
         if successors:
             self._dispatcher.dispatch(tasks=successors, scope_id=scope_id, user=user)
 
     def _schedule_unblocked_successors(
-        self, updated_job: ScopedJobInterface, user: str, completed_task_id: TaskSpecificationId
+        self,
+        updated_job: ScopedJobInterface,
+        user: str,
+        completed_task_id: TaskSpecificationId,
     ) -> list[ScheduledScopedTask]:
-        task_by_id = {t.spec_id: t for t in updated_job.get_tasks()}
+        task_by_id = {task.spec_id: task for task in updated_job.get_tasks()}
         scheduled = []
         for task in updated_job.get_tasks():
             if not isinstance(task, ScheduledScopedTask):
@@ -183,8 +191,8 @@ class TasksManagementService:
             if completed_task_id not in task.specification.depends_on:
                 continue
             if all(
-                isinstance(task_by_id.get(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
-                for pred_id in task.specification.depends_on
+                isinstance(task_by_id.get(predecessor_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
+                for predecessor_id in task.specification.depends_on
             ):
                 scheduled.append(task)
         return scheduled

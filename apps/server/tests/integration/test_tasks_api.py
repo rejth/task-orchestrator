@@ -21,6 +21,7 @@ def _scope_id() -> str:
 
 
 def test_init_scope_creates_job(client: TestClient):
+    """POST /scopes/{id} creates a new scope and returns 201."""
     scope_id = _scope_id()
     resp = client.post(f"{API_PREFIX}/scopes/{scope_id}")
     assert resp.status_code == 201
@@ -28,6 +29,7 @@ def test_init_scope_creates_job(client: TestClient):
 
 
 def test_init_scope_twice_returns_409(client: TestClient):
+    """Creating the same scope twice returns 409 Conflict."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     resp = client.post(f"{API_PREFIX}/scopes/{scope_id}")
@@ -35,6 +37,7 @@ def test_init_scope_twice_returns_409(client: TestClient):
 
 
 def test_get_tasks_returns_all_specs(client: TestClient):
+    """GET /tasks returns every task spec defined for an initialized scope."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     resp = client.get(f"{API_PREFIX}/scopes/{scope_id}/tasks")
@@ -47,11 +50,13 @@ def test_get_tasks_returns_all_specs(client: TestClient):
 
 
 def test_get_tasks_for_unknown_scope_returns_404(client: TestClient):
+    """GET /tasks for a non-existent scope returns 404."""
     resp = client.get(f"{API_PREFIX}/scopes/{_scope_id()}/tasks")
     assert resp.status_code == 404
 
 
 def test_schedule_task_returns_202_and_pending_tasks(client: TestClient):
+    """POST /schedule returns 202 and marks scheduled tasks as PENDING."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     resp = client.post(
@@ -63,6 +68,7 @@ def test_schedule_task_returns_202_and_pending_tasks(client: TestClient):
 
 
 def test_schedule_from_root_schedules_downstream(client: TestClient):
+    """Scheduling the root task also schedules downstream tasks in the DAG."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     resp = client.post(
@@ -76,6 +82,7 @@ def test_schedule_from_root_schedules_downstream(client: TestClient):
 
 
 def test_schedule_unknown_task_returns_422(client: TestClient):
+    """Scheduling an unknown task spec id returns 422."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     resp = client.post(f"{API_PREFIX}/scopes/{scope_id}/tasks/NOT_A_REAL_TASK/schedule")
@@ -83,6 +90,7 @@ def test_schedule_unknown_task_returns_422(client: TestClient):
 
 
 def test_abort_unknown_launch_returns_404(client: TestClient):
+    """DELETE on a non-existent launch returns 404."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     client.post(f"{API_PREFIX}/scopes/{scope_id}/tasks/RELOAD_PATIENT_DATA/schedule")
@@ -91,6 +99,7 @@ def test_abort_unknown_launch_returns_404(client: TestClient):
 
 
 def test_get_journal_for_nonexistent_launch_returns_404(client: TestClient):
+    """GET journal for a non-existent launch returns 404."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     resp = client.get(f"{API_PREFIX}/scopes/{scope_id}/tasks/RELOAD_PATIENT_DATA/launches/{uuid.uuid4()}/journal")
@@ -98,6 +107,7 @@ def test_get_journal_for_nonexistent_launch_returns_404(client: TestClient):
 
 
 def test_file_logs_are_persisted(client: TestClient, db_session: Session):
+    """File log records written via the service are persisted and retrievable."""
     scope_id = _scope_id()
     client.post(f"{API_PREFIX}/scopes/{scope_id}")
     schedule_resp = client.post(f"{API_PREFIX}/scopes/{scope_id}/tasks/RELOAD_PATIENT_DATA/schedule")

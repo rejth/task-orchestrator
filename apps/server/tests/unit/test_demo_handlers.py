@@ -9,12 +9,14 @@ from task_orchestrator.infrastructure.celery.runner import _run_handler
 
 
 def test_demo_handler_registry_covers_every_task_specification():
+    """The demo handler registry provides a handler for every TaskSpecificationId."""
     registry = build_demo_handler_registry()
 
     assert set(registry) == set(TaskSpecificationId)
 
 
 def test_demo_handler_returns_journal_and_file_log_without_delay():
+    """A demo handler with zero runtime returns SUCCESS, text logs, and one JSON file log."""
     registry = build_demo_handler_registry()
     handler = registry[TaskSpecificationId.RELOAD_PATIENT_DATA](0)
 
@@ -29,6 +31,7 @@ def test_demo_handler_returns_journal_and_file_log_without_delay():
 
 
 def test_run_handler_uses_registered_demo_handler():
+    """_run_handler delegates to the demo registry and returns SUCCESS with a file log."""
     status, logs = _run_handler(
         task_spec_id=TaskSpecificationId.EXPORT_TREATMENTS,
         scope_id="scope-123",
@@ -42,6 +45,7 @@ def test_run_handler_uses_registered_demo_handler():
 
 
 def test_demo_task_runtime_is_stable_within_bounds():
+    """demo_task_runtime_seconds is deterministic and stays within min/max bounds."""
     first = demo_task_runtime_seconds(TaskSpecificationId.PUSH_THERAPY_NODE, 10, 15)
     second = demo_task_runtime_seconds(TaskSpecificationId.PUSH_THERAPY_NODE, 10, 15)
 

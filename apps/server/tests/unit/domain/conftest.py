@@ -17,7 +17,12 @@ def make_spec(
     label: str = "",
     depends_on: list[TaskSpecificationId] | None = None,
 ) -> TaskSpecification:
-    return TaskSpecification(id=id, label=label or id.value, description="", depends_on=depends_on or [])
+    return TaskSpecification(
+        id=id,
+        label=label or id.value,
+        description="",
+        depends_on=depends_on or [],
+    )
 
 
 def make_new_task(spec: TaskSpecification) -> NewScopedTask:

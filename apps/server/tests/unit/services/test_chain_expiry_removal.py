@@ -9,22 +9,26 @@ from task_orchestrator.services.tasks_management_service import TasksManagementS
 
 
 def test_service_has_no_chain_expires_param():
+    """TasksManagementService no longer accepts chain_expires_seconds."""
     sig = inspect.signature(TasksManagementService.__init__)
     assert "chain_expires_seconds" not in sig.parameters
 
 
 def test_config_has_task_expiry_seconds():
+    """Settings exposes a positive TASK_EXPIRY_SECONDS."""
     s = Settings()
     assert hasattr(s, "TASK_EXPIRY_SECONDS")
     assert s.TASK_EXPIRY_SECONDS > 0
 
 
 def test_config_has_no_celery_task_chain_expires():
+    """Settings no longer defines CELERY_TASK_CHAIN_EXPIRES."""
     s = Settings()
     assert not hasattr(s, "CELERY_TASK_CHAIN_EXPIRES")
 
 
 def test_service_default_dispatcher_uses_3600():
+    """Default TaskDispatcher is constructed with expiry_seconds=3600."""
     broker = MagicMock()
     jobs_repo = MagicMock()
     with patch("task_orchestrator.services.tasks_management_service.TaskDispatcher") as MockDispatcher:
@@ -34,6 +38,7 @@ def test_service_default_dispatcher_uses_3600():
 
 
 def test_service_accepts_injected_dispatcher():
+    """TasksManagementService uses an injected TaskDispatcher when provided."""
     broker = MagicMock()
     jobs_repo = MagicMock()
     dispatcher = MagicMock(spec=TaskDispatcher)

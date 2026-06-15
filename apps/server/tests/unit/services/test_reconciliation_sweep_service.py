@@ -160,6 +160,7 @@ def _new_task(spec) -> NewScopedTask:
 
 
 def test_pending_task_with_no_deps_is_selected():
+    """A PENDING task with no dependencies is selected as stalled."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = _scheduled_task(spec)
     job = _make_job("scope-1", [task])
@@ -173,6 +174,7 @@ def test_pending_task_with_no_deps_is_selected():
 
 
 def test_pending_task_with_all_predecessors_satisfied_is_selected():
+    """A PENDING task whose predecessors all succeeded is selected as stalled."""
     pred_spec = make_spec(T.RELOAD_PATIENT_DATA)
     dep_spec = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     predecessor = _success_task(pred_spec)
@@ -187,6 +189,7 @@ def test_pending_task_with_all_predecessors_satisfied_is_selected():
 
 
 def test_failed_task_not_selected():
+    """FAILED tasks are not selected as stalled."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     failed = _failed_task(spec)
     job = _make_job("scope-1", [failed])
@@ -197,6 +200,7 @@ def test_failed_task_not_selected():
 
 
 def test_aborted_task_not_selected():
+    """Aborted FAILED tasks are not selected as stalled."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     aborted = _failed_task(spec, is_aborted=True)
     job = _make_job("scope-1", [aborted])
@@ -207,6 +211,7 @@ def test_aborted_task_not_selected():
 
 
 def test_in_progress_task_not_selected():
+    """IN_PROGRESS tasks are not selected as stalled."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     running = _started_task(spec)
     job = _make_job("scope-1", [running])
@@ -217,6 +222,7 @@ def test_in_progress_task_not_selected():
 
 
 def test_pending_task_with_unsatisfied_predecessor_not_selected():
+    """PENDING tasks blocked by unfinished predecessors are not selected."""
     pred_spec = make_spec(T.RELOAD_PATIENT_DATA)
     dep_spec = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     # predecessor is still running, not finished
@@ -230,6 +236,7 @@ def test_pending_task_with_unsatisfied_predecessor_not_selected():
 
 
 def test_new_task_not_selected():
+    """NEW tasks are not selected as stalled."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     new_task = _new_task(spec)
     job = _make_job("scope-1", [new_task])
@@ -240,6 +247,7 @@ def test_new_task_not_selected():
 
 
 def test_pending_task_with_skipped_predecessor_is_selected():
+    """A SKIPPED predecessor satisfies the dependency check for stalled selection."""
     pred_spec = make_spec(T.RELOAD_PATIENT_DATA)
     dep_spec = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     predecessor = _skipped_task(pred_spec)
@@ -254,6 +262,7 @@ def test_pending_task_with_skipped_predecessor_is_selected():
 
 
 def test_multiple_jobs_each_contribute_stalled_tasks():
+    """find_stalled_tasks returns stalled tasks from every affected job."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     t1 = _scheduled_task(spec)
     t2 = _scheduled_task(spec)
@@ -268,6 +277,7 @@ def test_multiple_jobs_each_contribute_stalled_tasks():
 
 
 def test_empty_repo_returns_empty_result():
+    """find_stalled_tasks returns an empty list when no jobs exist."""
     result = _make_service([]).find_stalled_tasks()
     assert result == []
 
@@ -276,6 +286,7 @@ def test_empty_repo_returns_empty_result():
 
 
 def test_sweep_dispatches_stalled_task():
+    """sweep() dispatches stalled tasks for a single job."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = _scheduled_task(spec)
     job = _make_job("scope-1", [task])
@@ -287,6 +298,7 @@ def test_sweep_dispatches_stalled_task():
 
 
 def test_sweep_dispatches_each_job_group_separately():
+    """sweep() dispatches stalled tasks once per scope."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     t1 = _scheduled_task(spec)
     t2 = _scheduled_task(spec)
@@ -302,6 +314,7 @@ def test_sweep_dispatches_each_job_group_separately():
 
 
 def test_sweep_with_no_stalled_tasks_dispatches_nothing():
+    """sweep() does nothing when no stalled tasks exist."""
     dispatcher = MagicMock()
 
     _make_service([], dispatcher=dispatcher).sweep()

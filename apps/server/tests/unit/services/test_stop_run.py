@@ -22,6 +22,7 @@ def _make_started_task(spec: TaskSpecification) -> StartedScopedTask:
 
 
 def test_stop_run_aborts_pending_task():
+    """stop_run aborts a PENDING task as FAILED with is_aborted=True."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     job = _make_job("scope-1", [task])
@@ -37,6 +38,7 @@ def test_stop_run_aborts_pending_task():
 
 
 def test_stop_run_aborts_in_progress_task():
+    """stop_run aborts an IN_PROGRESS task as FAILED with is_aborted=True."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = _make_started_task(spec)
     job = _make_job("scope-1", [task])
@@ -52,6 +54,7 @@ def test_stop_run_aborts_in_progress_task():
 
 
 def test_stop_run_aborts_all_non_terminal_tasks():
+    """stop_run aborts every non-terminal task in the job."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_SOMATIC_MUTATIONS])
@@ -75,6 +78,7 @@ def test_stop_run_aborts_all_non_terminal_tasks():
 
 
 def test_stop_run_aborts_new_task():
+    """stop_run aborts a NEW task as FAILED with is_aborted=True."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_new_task(spec)
     job = _make_job("scope-1", [task])
@@ -90,6 +94,7 @@ def test_stop_run_aborts_new_task():
 
 
 def test_stop_run_leaves_terminal_tasks_unchanged():
+    """stop_run leaves SUCCESS tasks unchanged while aborting non-terminal ones."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     finished_a = _make_started_task(spec_a).finish(message="done", at=AT)
@@ -110,6 +115,7 @@ def test_stop_run_leaves_terminal_tasks_unchanged():
 
 
 def test_after_stop_run_updated_job_has_no_dispatchable_tasks():
+    """After stop_run, dispatchable_tasks() returns nothing."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     job = _make_job("scope-1", [task])
@@ -123,6 +129,7 @@ def test_after_stop_run_updated_job_has_no_dispatchable_tasks():
 
 
 def test_after_stop_run_send_to_queue_enqueues_nothing():
+    """After stop_run, send_to_queue dispatches an empty task list."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     job = _make_job("scope-1", [task])
@@ -146,6 +153,7 @@ def test_after_stop_run_send_to_queue_enqueues_nothing():
 
 
 def test_after_stop_run_reconciliation_sweep_dispatches_nothing():
+    """After stop_run, the reconciliation sweep finds nothing to dispatch."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     job = _make_job("scope-1", [task])
@@ -167,6 +175,7 @@ def test_after_stop_run_reconciliation_sweep_dispatches_nothing():
 
 
 def test_stop_run_revokes_in_progress_launch():
+    """stop_run revokes the Celery task for an IN_PROGRESS launch."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = _make_started_task(spec)
     launch_id = task.current_launch.id
@@ -181,6 +190,7 @@ def test_stop_run_revokes_in_progress_launch():
 
 
 def test_stop_run_revokes_pending_launch():
+    """stop_run revokes the Celery task for a PENDING launch."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     launch_id = task.current_launch.id
@@ -195,6 +205,7 @@ def test_stop_run_revokes_pending_launch():
 
 
 def test_stop_run_revokes_all_active_launches():
+    """stop_run revokes every active launch across the job."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
@@ -212,6 +223,7 @@ def test_stop_run_revokes_all_active_launches():
 
 
 def test_stop_run_no_revoke_when_all_tasks_terminal():
+    """stop_run does not revoke Celery when all tasks are already terminal."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = _make_started_task(spec).finish(message="done", at=AT)
     job = _make_job("scope-1", [task])

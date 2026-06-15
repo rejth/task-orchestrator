@@ -39,6 +39,7 @@ def _make_service(
 
 
 def test_send_to_queue_calls_event_driven(jobs_repo, broker, operation_result):
+    """send_to_queue delegates to _send_event_driven."""
     svc = _make_service(jobs_repo, broker)
     with patch.object(svc, "_send_event_driven") as ed_mock:
         svc.send_to_queue(result=operation_result, user="user@example.com")
@@ -61,6 +62,7 @@ def _make_job_stub(scope_id: str, dispatchable) -> MagicMock:
 
 
 def test_event_driven_dispatches_ready_frontier(jobs_repo, broker):
+    """Event-driven dispatch enqueues tasks returned by dispatchable_tasks()."""
     spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
     ready_task = make_scheduled_task(spec)
     job = _make_job_stub(SCOPE_ID, [ready_task])
@@ -76,6 +78,7 @@ def test_event_driven_dispatches_ready_frontier(jobs_repo, broker):
 
 
 def test_event_driven_empty_frontier_dispatches_nothing(jobs_repo, broker):
+    """Event-driven dispatch still calls dispatch with an empty list when nothing is ready."""
     job = _make_job_stub(SCOPE_ID, [])
     result = MagicMock()
     result.updated_job = job
@@ -88,6 +91,7 @@ def test_event_driven_empty_frontier_dispatches_nothing(jobs_repo, broker):
 
 
 def test_event_driven_passes_scope_id_from_job(jobs_repo, broker):
+    """Event-driven dispatch passes the job's scope id to the dispatcher."""
     expected_scope = "unique-scope-99"
     spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
     job = _make_job_stub(expected_scope, [make_scheduled_task(spec)])
@@ -118,6 +122,7 @@ def _make_job_with_tasks(tasks) -> ScopedJob:
 
 
 def test_finish_task_event_driven_schedules_and_dispatches_successor(jobs_repo, broker):
+    """finish_task schedules a ready successor and dispatch_successors enqueues it."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
@@ -142,6 +147,7 @@ def test_finish_task_event_driven_schedules_and_dispatches_successor(jobs_repo, 
 
 
 def test_skip_task_event_driven_schedules_and_dispatches_successor(jobs_repo, broker):
+    """skip_task schedules a ready successor and dispatch_successors enqueues it."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
@@ -172,6 +178,7 @@ def _make_finished_task(spec) -> SuccessfullyFinishedScopedTask:
 
 
 def test_abort_task_event_driven_dispatches_nothing_downstream(jobs_repo, broker):
+    """abort_task does not enqueue any downstream tasks."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS, depends_on=[T.RELOAD_PATIENT_DATA])
     started_a = _make_started_task(spec_a)
@@ -193,6 +200,7 @@ def test_abort_task_event_driven_dispatches_nothing_downstream(jobs_repo, broker
 
 
 def test_fan_in_last_predecessor_completes_dispatches_successor(jobs_repo, broker):
+    """Completing the last fan-in predecessor schedules and dispatches the join task."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS)
     spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])
@@ -266,6 +274,7 @@ def test_root_task_not_dispatched_as_successor(jobs_repo, broker):
 
 
 def test_finish_task_event_driven_fan_in_not_ready(jobs_repo, broker):
+    """Completing one fan-in predecessor does not dispatch the join task early."""
     spec_a = make_spec(T.RELOAD_PATIENT_DATA)
     spec_b = make_spec(T.RELOAD_SOMATIC_MUTATIONS)
     spec_c = make_spec(T.RELOAD_MATCHED_TREATMENTS, depends_on=[T.RELOAD_PATIENT_DATA, T.RELOAD_SOMATIC_MUTATIONS])
@@ -288,6 +297,7 @@ def test_finish_task_event_driven_fan_in_not_ready(jobs_repo, broker):
 
 
 def test_dispatch_successors_empty_list_is_noop(jobs_repo, broker):
+    """dispatch_successors with an empty list does not call the dispatcher."""
     mock_dispatcher = MagicMock()
     svc = _make_service(jobs_repo, broker, task_dispatcher=mock_dispatcher)
     svc.dispatch_successors(successors=[], scope_id=SCOPE_ID, user=USER)

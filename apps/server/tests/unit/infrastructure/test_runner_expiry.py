@@ -45,6 +45,7 @@ def _runner_patches(mock_service: MagicMock) -> tuple[Any, ...]:
 
 
 def test_runner_calls_expire_task_when_expires_at_elapsed():
+    """An elapsed expires_at causes expire_task instead of start_task."""
     mock_service = _make_mock_service()
     *patches, mock_session = _runner_patches(mock_service)
     past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)).isoformat()
@@ -57,6 +58,7 @@ def test_runner_calls_expire_task_when_expires_at_elapsed():
 
 
 def test_runner_commits_after_expire_task():
+    """The runner commits the session after successfully expiring a task."""
     mock_service = _make_mock_service()
     *patches, mock_session = _runner_patches(mock_service)
     past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)).isoformat()
@@ -68,6 +70,7 @@ def test_runner_commits_after_expire_task():
 
 
 def test_runner_does_not_expire_when_expires_at_is_future():
+    """A future expires_at allows normal start_task execution."""
     mock_service = _make_mock_service()
     *patches, mock_session = _runner_patches(mock_service)
     future = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)).isoformat()
@@ -111,6 +114,7 @@ def test_runner_skips_expiry_when_predecessor_in_flight():
 
 
 def test_runner_does_not_expire_when_no_expires_at():
+    """Missing expires_at skips expiry and proceeds to start_task."""
     mock_service = _make_mock_service()
     *patches, mock_session = _runner_patches(mock_service)
 

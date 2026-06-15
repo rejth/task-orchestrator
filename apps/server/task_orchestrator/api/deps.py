@@ -39,5 +39,8 @@ def get_service(
     return TasksManagementService(
         jobs_repo=jobs_repo,
         broker=broker,
-        task_dispatcher=TaskDispatcher(broker=broker, expiry_seconds=settings.TASK_EXPIRY_SECONDS),
+        task_dispatcher=TaskDispatcher(
+            broker=broker,
+            expiry_seconds=settings.TASK_EXPIRY_SECONDS,
+        ),
     )

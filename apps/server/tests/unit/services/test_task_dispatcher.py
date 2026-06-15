@@ -18,6 +18,7 @@ def dispatcher():
 
 
 def test_each_task_enqueued_independently(dispatcher):
+    """Each task in a batch gets its own Celery Signature and apply_async call."""
     spec_a = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
     spec_b = make_spec(TaskSpecificationId.RELOAD_PATIENT_PARAMETERS)
     tasks = [make_scheduled_task(spec_a), make_scheduled_task(spec_b)]
@@ -33,6 +34,7 @@ def test_each_task_enqueued_independently(dispatcher):
 
 
 def test_launch_id_is_celery_task_id(dispatcher):
+    """The launch UUID is passed as Celery task_id for idempotent enqueue."""
     launch_id = uuid4()
     spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec, launch_id=launch_id)
@@ -48,6 +50,7 @@ def test_launch_id_is_celery_task_id(dispatcher):
 
 
 def test_signatures_are_immutable(dispatcher):
+    """Dispatched Celery signatures are marked immutable."""
     spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
 
@@ -62,6 +65,7 @@ def test_signatures_are_immutable(dispatcher):
 
 
 def test_each_signature_has_no_broker_level_expiry(dispatcher):
+    """Dispatched signatures do not set broker-level expires."""
     spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
 
@@ -76,6 +80,7 @@ def test_each_signature_has_no_broker_level_expiry(dispatcher):
 
 
 def test_signature_args_match_task(dispatcher):
+    """Signature args include scope_id, spec_id, launch_id, and user."""
     launch_id = uuid4()
     spec = make_spec(TaskSpecificationId.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec, launch_id=launch_id)
@@ -92,6 +97,7 @@ def test_signature_args_match_task(dispatcher):
 
 
 def test_empty_task_list_enqueues_nothing(dispatcher):
+    """Dispatching an empty task list creates no signatures."""
     with patch("task_orchestrator.services.task_dispatcher.Signature") as MockSig:
         dispatcher.dispatch([], scope_id=SCOPE_ID, user=USER)
 
@@ -158,6 +164,7 @@ def test_dispatcher_includes_expires_at_in_args(dispatcher):
 
 @pytest.mark.parametrize("bad_expiry", [0, -1, -100])
 def test_zero_or_negative_expiry_raises(bad_expiry):
+    """TaskDispatcher rejects zero or negative expiry_seconds."""
     with pytest.raises(ValueError, match="expiry_seconds must be positive"):
         TaskDispatcher(broker=MagicMock(), expiry_seconds=bad_expiry)
 

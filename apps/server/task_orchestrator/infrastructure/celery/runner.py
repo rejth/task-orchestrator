@@ -35,7 +35,12 @@ class TaskExecutionError(TaskError):
 
 @celery_app.task(name=TASK_NAME, bind=True, max_retries=0)
 def task_runner(
-    self: CeleryTask, scope_id: str, task_id: str, launch_id: str, user: str, expires_at: str | None = None
+    self: CeleryTask,
+    scope_id: str,
+    task_id: str,
+    launch_id: str,
+    user: str,
+    expires_at: str | None = None,
 ) -> None:
     logger.info("Starting task %s launch %s for scope %s", task_id, launch_id, scope_id)
     task_spec_id = TaskSpecificationId(task_id)
@@ -159,6 +164,7 @@ def _run_handler(
     max_runtime_seconds: float = 15.0,
 ) -> tuple[TaskHandleStatus, list[Log]]:
     handler_factory = _HANDLERS.get(task_spec_id)
+
     if handler_factory is None:
         record = UnclassifiedLogRecord(
             message=f"No handler for task '{task_spec_id.value}'. Launch will be skipped.",
@@ -167,9 +173,11 @@ def _run_handler(
         )
         logger.warning(str(record))
         return TaskHandleStatus.SKIP, [record]
+
     runtime_seconds = demo_task_runtime_seconds(
         task_id=task_spec_id,
         min_seconds=min_runtime_seconds,
         max_seconds=max_runtime_seconds,
     )
+
     return handler_factory(runtime_seconds).run(scope_id=scope_id)

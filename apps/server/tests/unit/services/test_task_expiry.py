@@ -15,6 +15,7 @@ from tests.unit.services.conftest import _make_job, _make_service
 
 
 def test_expire_task_transitions_pending_to_failed():
+    """expire_task transitions a PENDING task to FAILED."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     launch_id = task.current_launch.id
@@ -33,6 +34,7 @@ def test_expire_task_transitions_pending_to_failed():
 
 
 def test_expire_task_sets_aborted_flag():
+    """expire_task marks the launch as aborted."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     launch_id = task.current_launch.id
@@ -48,6 +50,7 @@ def test_expire_task_sets_aborted_flag():
 
 
 def test_expire_task_message_indicates_expiry():
+    """expire_task sets a launch message mentioning expiry."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     launch_id = task.current_launch.id
@@ -63,6 +66,7 @@ def test_expire_task_message_indicates_expiry():
 
 
 def test_expired_task_no_longer_dispatchable():
+    """An expired task is no longer returned by dispatchable_tasks()."""
     spec = make_spec(T.RELOAD_PATIENT_DATA)
     task = make_scheduled_task(spec)
     launch_id = task.current_launch.id

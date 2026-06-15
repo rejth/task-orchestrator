@@ -95,11 +95,19 @@ class ScopedJobInterface(Protocol[S]):
     ) -> OperationResult[S]: ...
 
     def start(
-        self, task_id: TaskSpecificationId, launch_id: UUID, message: str, at: datetime.datetime
+        self,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        message: str,
+        at: datetime.datetime,
     ) -> tuple[ScopedJobInterface[S], StartedScopedTask]: ...
 
     def success(
-        self, task_id: TaskSpecificationId, launch_id: UUID, message: str, at: datetime.datetime
+        self,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        message: str,
+        at: datetime.datetime,
     ) -> tuple[ScopedJobInterface[S], SuccessfullyFinishedScopedTask]: ...
 
     def fail(
@@ -112,46 +120,71 @@ class ScopedJobInterface(Protocol[S]):
     ) -> ScopedJobInterface[S]: ...
 
     def skip(
-        self, task_id: TaskSpecificationId, launch_id: UUID, message: str, at: datetime.datetime
+        self,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        message: str,
+        at: datetime.datetime,
     ) -> tuple[ScopedJobInterface[S], SkippedScopedTask]: ...
 
-    def get_launch_journal(self, task_id: TaskSpecificationId, launch_id: UUID) -> Sequence[LaunchLogRecord]: ...
+    def get_launch_journal(
+        self,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+    ) -> Sequence[LaunchLogRecord]: ...
 
     def update_journal(
-        self, task_id: TaskSpecificationId, launch_id: UUID, logs: list[Log]
+        self,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        logs: list[Log],
     ) -> tuple[ScopedJobInterface[S], StartedScopedTask]: ...
 
-    def get_log_file(self, task_id: TaskSpecificationId, launch_id: UUID, log_id: UUID) -> FileLogRecord: ...
+    def get_log_file(
+        self,
+        task_id: TaskSpecificationId,
+        launch_id: UUID,
+        log_id: UUID,
+    ) -> FileLogRecord: ...
 
     def dispatchable_tasks(self) -> list[ScheduledScopedTask]: ...
 
-    def stop_run(self, message: str, at: datetime.datetime) -> tuple[ScopedJobInterface[S], list[UUID]]: ...
+    def stop_run(
+        self,
+        message: str,
+        at: datetime.datetime,
+    ) -> tuple[ScopedJobInterface[S], list[UUID]]: ...
 
 
 def _topological_sort(tasks: list[ScheduledScopedTask]) -> list[ScheduledScopedTask]:
-    task_by_id = {t.spec_id: t for t in tasks}
+    task_by_id = {task.spec_id: task for task in tasks}
     task_ids = set(task_by_id.keys())
     in_degree: dict[TaskSpecificationId, int] = {t.spec_id: 0 for t in tasks}
-    for t in tasks:
-        for dep_id in t.specification.depends_on:
+
+    for task in tasks:
+        for dep_id in task.specification.depends_on:
             if dep_id in task_ids:
-                in_degree[t.spec_id] += 1
+                in_degree[task.spec_id] += 1
+
     queue: Queue[TaskSpecificationId] = Queue()
     for spec_id, degree in in_degree.items():
         if degree == 0:
             queue.put(spec_id)
+
     sorted_tasks: list[ScheduledScopedTask] = []
     while not queue.empty():
         spec_id = queue.get()
         sorted_tasks.append(task_by_id[spec_id])
-        for t in tasks:
-            if spec_id in t.specification.depends_on and t.spec_id in task_ids:
-                in_degree[t.spec_id] -= 1
-                if in_degree[t.spec_id] == 0:
-                    queue.put(t.spec_id)
+        for task in tasks:
+            if spec_id in task.specification.depends_on and task.spec_id in task_ids:
+                in_degree[task.spec_id] -= 1
+                if in_degree[task.spec_id] == 0:
+                    queue.put(task.spec_id)
+
     if len(sorted_tasks) != len(tasks):
-        cycle_ids = [t.spec_id.value for t in tasks if task_by_id[t.spec_id] not in sorted_tasks]
+        cycle_ids = [task.spec_id.value for task in tasks if task_by_id[task.spec_id] not in sorted_tasks]
         raise ValueError(f"Dependency cycle detected among tasks: {cycle_ids}")
+
     return sorted_tasks
 
 
@@ -195,13 +228,17 @@ class ScopedJob(Generic[S]):
     ) -> OperationResult[S]:
         current_task = self._get_task_by_id(task_id=task_id)
         previous_tasks = self._previous_tasks(task=current_task)
+        # Roots of this task's upstream chain
         root_tasks = (
             [task for task in previous_tasks if len(task.specification.depends_on) == 0]
             if previous_tasks
             else [current_task]
         )
 
+        # Tasks we want to schedule, which are the requested task plus any NEW or FAILED tasks in the chain
+        # from roots through all reachable successors
         tasks_to_schedule: set[TaskSpecificationId] = {current_task.spec_id}
+        # Only the connected subgraph around the task we're scheduling: roots → all reachable successors
         scoped_tasks: list[ScopedTask] = []
 
         for task in [*root_tasks, *self._next_tasks(start_tasks=root_tasks)]:
@@ -210,21 +247,32 @@ class ScopedJob(Generic[S]):
                 case NewScopedTask() | FailedScopedTask():
                     tasks_to_schedule.add(task.spec_id)
 
+        # Forward edges: for each task, which tasks it depends on
         task_graph = self._build_graph_dependencies(scoped_tasks=scoped_tasks)
+        # Classify subgraph nodes as upstream (BEFORE), downstream (AFTER), or on the frontier (MULTIPLE).
         location_map = self._mark_graph(graph=task_graph, special_nodes=list(tasks_to_schedule))
 
         scheduled_sequence: list[ScheduledScopedTask] = []
         for spec_id, location in location_map.items():
+            # Only frontier (the requested task, NEW or FAILED) and downstream tasks are scheduled
             if location in (TaskLocation.MULTIPLE, TaskLocation.AFTER):
                 scheduled_sequence.append(
                     self._schedule_current_task(
-                        task_id=spec_id, launch_id=launch_id_generator(), message=message, at=at, by=by
+                        task_id=spec_id,
+                        launch_id=launch_id_generator(),
+                        message=message,
+                        at=at,
+                        by=by,
                     )
                 )
 
         sorted_sequence = _topological_sort(scheduled_sequence)
         return OperationResult[S](
-            updated_job=self._update_tasks(tasks_to_update=sorted_sequence, new_tasks=[], deleted_tasks=set()),
+            updated_job=self._update_tasks(
+                tasks_to_update=sorted_sequence,
+                new_tasks=[],
+                deleted_tasks=set(),
+            ),
             tasks_sequence=sorted_sequence,
         )
 
@@ -337,10 +385,12 @@ class ScopedJob(Generic[S]):
         at: datetime.datetime,
     ) -> FailedScopedTask:
         current_task = self._get_task_by_id(task_id=task_id)
+
         for task in self._previous_tasks(task=current_task):
             match task:
                 case ScheduledScopedTask() | StartedScopedTask():
                     raise RequiredTaskNotFinished(target_task=current_task, not_finished_task=task)
+
         match current_task:
             case (
                 ScheduledScopedTask(current_launch=current_launch) | StartedScopedTask(current_launch=current_launch)
@@ -388,6 +438,7 @@ class ScopedJob(Generic[S]):
                 if elem.spec_id not in visited:
                     visit(elem)
 
+        # Reverse the list to get the correct order of previous tasks
         return previous_tasks[::-1]
 
     def _next_tasks(self, start_tasks: list[ScopedTask]) -> list[ScopedTask]:
@@ -418,26 +469,29 @@ class ScopedJob(Generic[S]):
         for task in self.tasks:
             if task.spec_id in deleted_tasks:
                 continue
-            matched = next((u for u in tasks_to_update if u.match(task_id=task.spec_id)), None)
+            matched = next((elem for elem in tasks_to_update if elem.match(task_id=task.spec_id)), None)
             updated.append(matched if matched else task)
         return replace(self, tasks=updated + list(new_tasks))
 
     def _update_task(self, updated_task: ScopedTask) -> ScopedJob[S]:
-        return replace(self, tasks=[updated_task if updated_task.match(task_id=t.spec_id) else t for t in self.tasks])
+        return replace(
+            self,
+            tasks=[updated_task if updated_task.match(task_id=task.spec_id) else task for task in self.tasks],
+        )
 
     def dispatchable_tasks(self) -> list[ScheduledScopedTask]:
         """PENDING tasks whose every predecessor is SUCCESS or SKIPPED — runnable now."""
-        task_by_id = {t.spec_id: t for t in self.tasks}
-        result = []
+        task_by_id = {task.spec_id: task for task in self.tasks}
+        tasks_to_dispatch = []
         for task in self.get_tasks():
             if not isinstance(task, ScheduledScopedTask):
                 continue
             if all(
-                isinstance(task_by_id.get(pred_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
-                for pred_id in task.specification.depends_on
+                isinstance(task_by_id.get(predecessor_id), (SuccessfullyFinishedScopedTask, SkippedScopedTask))
+                for predecessor_id in task.specification.depends_on
             ):
-                result.append(task)
-        return result
+                tasks_to_dispatch.append(task)
+        return tasks_to_dispatch
 
     def stop_run(self, message: str, at: datetime.datetime) -> tuple[ScopedJob[S], list[UUID]]:
         """Abort all PENDING and IN_PROGRESS tasks; return launch IDs to revoke in Celery."""
@@ -457,13 +511,13 @@ class ScopedJob(Generic[S]):
         return updated_job, launch_ids
 
     def _get_outstanding_tasks(self) -> list[ScopedTask]:
-        return [t for t in self.get_tasks() if isinstance(t, ScheduledScopedTask | StartedScopedTask)]
+        return [task for task in self.get_tasks() if isinstance(task, ScheduledScopedTask | StartedScopedTask)]
 
     def _full_refresh(self, task_specifications: list[TaskSpecification]) -> ScopedJob[S]:
-        task_specs_by_id = {t.id: t for t in task_specifications}
-        existing_by_spec_id = {t.spec_id: t for t in self.get_tasks()}
+        task_specs_by_id = {task.id: task for task in task_specifications}
+        existing_by_spec_id = {task.spec_id: task for task in self.get_tasks()}
         existing_ids = set(existing_by_spec_id)
-        full_ids = {t.id for t in task_specifications}
+        full_ids = {task.id for task in task_specifications}
         return self._update_tasks(
             tasks_to_update=[existing_by_spec_id[sid].merge(task_specs_by_id[sid]) for sid in full_ids & existing_ids],
             new_tasks=[
@@ -509,8 +563,8 @@ class ScopedJob(Generic[S]):
 
     @staticmethod
     def _build_graph_dependencies(scoped_tasks: list[ScopedTask]) -> TaskDependencies:
-        deps = {}
+        deps: TaskDependencies = {}
         for task in scoped_tasks:
             spec_id = task.spec_id
-            deps[spec_id] = [t.spec_id for t in scoped_tasks if spec_id in t.specification.depends_on]
+            deps[spec_id] = [task.spec_id for task in scoped_tasks if spec_id in task.specification.depends_on]
         return deps

@@ -31,10 +31,12 @@ def sweep_mocks():
 
 
 def test_sweep_task_name():
+    """The Celery task is registered under SWEEP_TASK_NAME."""
     assert reconciliation_sweep.name == SWEEP_TASK_NAME  # type: ignore[attr-defined]
 
 
 def test_beat_schedule_contains_sweep_entry():
+    """Celery beat schedule includes a reconciliation-sweep entry."""
     from task_orchestrator.infrastructure.celery.app import get_celery_app
 
     app = get_celery_app()
@@ -45,6 +47,7 @@ def test_beat_schedule_contains_sweep_entry():
 
 
 def test_beat_schedule_interval_matches_settings():
+    """Beat sweep interval matches RECONCILIATION_SWEEP_INTERVAL_SECONDS from settings."""
     from task_orchestrator.api.config import get_settings
     from task_orchestrator.infrastructure.celery.app import get_celery_app
 
@@ -55,22 +58,26 @@ def test_beat_schedule_interval_matches_settings():
 
 
 def test_sweep_task_calls_service_sweep(sweep_mocks):
+    """reconciliation_sweep invokes ReconciliationSweepService.sweep()."""
     reconciliation_sweep()
     sweep_mocks["service"].sweep.assert_called_once()
 
 
 def test_sweep_task_does_not_commit_session(sweep_mocks):
+    """reconciliation_sweep does not commit the DB session."""
     reconciliation_sweep()
     sweep_mocks["session"].commit.assert_not_called()
 
 
 def test_sweep_task_wires_system_user(sweep_mocks):
+    """reconciliation_sweep passes system_user='system@sweep' to the service."""
     reconciliation_sweep()
     _, kwargs = sweep_mocks["MockService"].call_args
     assert kwargs["system_user"] == "system@sweep"
 
 
 def test_sweep_task_propagates_exception_from_sweep(sweep_mocks):
+    """Exceptions from sweep() propagate and skip session commit."""
     sweep_mocks["service"].sweep.side_effect = RuntimeError("broker down")
     with pytest.raises(RuntimeError, match="broker down"):
         reconciliation_sweep()

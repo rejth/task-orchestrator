@@ -26,10 +26,12 @@ def make_scheduled() -> ScheduledLaunch:
 
 
 def test_scheduled_launch_status():
+    """A newly scheduled launch has status PENDING."""
     assert make_scheduled().status == TaskLaunchStatus.PENDING
 
 
 def test_scheduled_to_started():
+    """Starting a PENDING launch transitions it to IN_PROGRESS and records started_at."""
     started = make_scheduled().start(message="started", at=AT)
     assert isinstance(started, StartedLaunch)
     assert started.status == TaskLaunchStatus.IN_PROGRESS
@@ -37,6 +39,7 @@ def test_scheduled_to_started():
 
 
 def test_started_to_success():
+    """A started launch can finish successfully with FINISHED status."""
     finished = make_scheduled().start("ok", AT).success("done", AT)
     assert isinstance(finished, SuccessfullyFinishedLaunch)
     assert finished.status == TaskLaunchStatus.FINISHED
@@ -44,6 +47,7 @@ def test_started_to_success():
 
 
 def test_started_to_failed():
+    """A started launch can fail with is_aborted=False."""
     failed = make_scheduled().start("ok", AT).fail("error", AT, is_aborted=False)
     assert isinstance(failed, FailedLaunch)
     assert failed.status == TaskLaunchStatus.FAILED
@@ -51,18 +55,21 @@ def test_started_to_failed():
 
 
 def test_started_to_aborted():
+    """A started launch can fail with is_aborted=True."""
     aborted = make_scheduled().start("ok", AT).fail("aborted", AT, is_aborted=True)
     assert isinstance(aborted, FailedLaunch)
     assert aborted.metadata.is_aborted is True
 
 
 def test_started_to_skipped():
+    """A started launch can be skipped."""
     skipped = make_scheduled().start("ok", AT).skip("skip", AT)
     assert isinstance(skipped, SkippedLaunch)
     assert skipped.status == TaskLaunchStatus.SKIPPED
 
 
 def test_scheduled_direct_fail():
+    """A PENDING launch can fail without ever being started."""
     failed = make_scheduled().fail("immediate fail", AT, is_aborted=False)
     assert isinstance(failed, FailedLaunch)
     assert failed.status == TaskLaunchStatus.FAILED

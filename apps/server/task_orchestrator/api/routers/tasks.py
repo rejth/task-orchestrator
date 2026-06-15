@@ -126,6 +126,8 @@ def schedule_task(
     try:
         spec_id = TaskSpecificationId(task_id)
         result = service.schedule_task(scope_id=str(scope_id), task_id=spec_id, user=DEMO_USER)
+        # Persist the schedule before enqueueing Celery work so the Celery worker sees the launch row;
+        # dispatch errors are retried by sweep.
         db.commit()
         try:
             service.send_to_queue(result=result, user=DEMO_USER)

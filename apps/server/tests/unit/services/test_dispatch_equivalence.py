@@ -120,6 +120,7 @@ def direct_dependency_edges(
 
 class TestEventDrivenOutputCapture:
     def test_simulation_linear_covers_all_tasks(self):
+        """Linear simulation dispatches every task in the chain."""
         tasks = _make_linear_sequence()
         waves = simulate_event_driven_waves(tasks)
         assert set(waves.keys()) == {
@@ -130,6 +131,7 @@ class TestEventDrivenOutputCapture:
         }
 
     def test_simulation_diamond_covers_all_tasks(self):
+        """Diamond simulation dispatches every task in the graph."""
         tasks = _make_diamond()
         waves = simulate_event_driven_waves(tasks)
         assert set(waves.keys()) == {
@@ -140,21 +142,25 @@ class TestEventDrivenOutputCapture:
         }
 
     def test_simulation_single_task_wave_zero(self):
+        """A single-task job is dispatched entirely in wave zero."""
         tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
         waves = simulate_event_driven_waves(tasks)
         assert waves == {T.RELOAD_PATIENT_DATA: 0}
 
     def test_simulation_linear_root_dispatched_first(self):
+        """In a linear chain, the root task is dispatched in wave zero."""
         tasks = _make_linear_sequence()
         waves = simulate_event_driven_waves(tasks)
         assert waves[T.RELOAD_PATIENT_DATA] == 0
 
     def test_simulation_diamond_parallel_pair_at_same_wave(self):
+        """Diamond parallel branches are dispatched in the same wave."""
         tasks = _make_diamond()
         waves = simulate_event_driven_waves(tasks)
         assert waves[T.RELOAD_SOMATIC_MUTATIONS] == waves[T.RELOAD_GERMLINE_MUTATIONS]
 
     def test_simulation_diamond_fan_in_dispatched_after_parallel(self):
+        """Diamond fan-in task is dispatched after its parallel predecessors."""
         tasks = _make_diamond()
         waves = simulate_event_driven_waves(tasks)
         assert waves[T.RELOAD_SOMATIC_MUTATIONS] < waves[T.RELOAD_MATCHED_TREATMENTS]
@@ -170,16 +176,19 @@ class TestLinearOrdering:
     """Event-driven dispatch produces correct ordering for linear graphs."""
 
     def test_single_node_covers_task(self):
+        """A single-node graph dispatches only that task."""
         tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
         event_ids = set(simulate_event_driven_waves(tasks).keys())
         assert event_ids == {T.RELOAD_PATIENT_DATA}
 
     def test_two_node_chain_covers_both_tasks(self):
+        """A two-node chain dispatches both tasks."""
         tasks = _make_two_node_chain()
         event_ids = set(simulate_event_driven_waves(tasks).keys())
         assert event_ids == {T.RELOAD_PATIENT_DATA, T.RELOAD_MATCHED_TREATMENTS}
 
     def test_four_node_chain_happens_before_preserved(self):
+        """Every dependency edge in a four-node chain respects happens-before ordering."""
         tasks = _make_linear_sequence()
         event_waves = simulate_event_driven_waves(tasks)
         for pred_id, succ_id in direct_dependency_edges(tasks):
@@ -189,15 +198,18 @@ class TestLinearOrdering:
             )
 
     def test_two_node_chain_happens_before_preserved(self):
+        """Root precedes successor in a two-node chain."""
         tasks = _make_two_node_chain()
         event_waves = simulate_event_driven_waves(tasks)
         assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
 
     def test_single_node_no_dependency_edges(self):
+        """A single-node graph has no dependency edges."""
         tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
         assert direct_dependency_edges(tasks) == set()
 
     def test_four_node_chain_strictly_ordered(self):
+        """A four-node linear chain is dispatched in strict sequence."""
         tasks = _make_linear_sequence()
         event_waves = simulate_event_driven_waves(tasks)
         assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
@@ -205,6 +217,7 @@ class TestLinearOrdering:
         assert event_waves[T.EXPORT_TREATMENTS] < event_waves[T.PUSH_MATCHED_TREATMENTS]
 
     def test_single_node_at_wave_zero(self):
+        """The only task in a single-node graph is at wave zero."""
         tasks = [make_scheduled_task(make_spec(T.RELOAD_PATIENT_DATA))]
         event_waves = simulate_event_driven_waves(tasks)
         assert event_waves[T.RELOAD_PATIENT_DATA] == 0
@@ -219,6 +232,7 @@ class TestParallelOrdering:
     """Event-driven dispatch produces correct ordering for parallel graphs."""
 
     def test_diamond_covers_all_tasks(self):
+        """Diamond event-driven dispatch covers all four tasks."""
         tasks = _make_diamond()
         event_ids = set(simulate_event_driven_waves(tasks).keys())
         assert event_ids == {
@@ -229,6 +243,7 @@ class TestParallelOrdering:
         }
 
     def test_sibling_parallel_covers_all_tasks(self):
+        """Fan-out graph dispatches the root and every sibling branch."""
         tasks = _make_sibling_parallel()
         event_ids = set(simulate_event_driven_waves(tasks).keys())
         assert event_ids == {
@@ -239,6 +254,7 @@ class TestParallelOrdering:
         }
 
     def test_diamond_happens_before_preserved(self):
+        """Every dependency edge in a diamond respects happens-before ordering."""
         tasks = _make_diamond()
         event_waves = simulate_event_driven_waves(tasks)
         for pred_id, succ_id in direct_dependency_edges(tasks):
@@ -248,6 +264,7 @@ class TestParallelOrdering:
             )
 
     def test_sibling_parallel_happens_before_preserved(self):
+        """Every dependency edge in a fan-out graph respects happens-before ordering."""
         tasks = _make_sibling_parallel()
         event_waves = simulate_event_driven_waves(tasks)
         for pred_id, succ_id in direct_dependency_edges(tasks):
@@ -257,29 +274,34 @@ class TestParallelOrdering:
             )
 
     def test_diamond_fan_out_root_before_parallel(self):
+        """Diamond root is dispatched before both parallel branches."""
         tasks = _make_diamond()
         event_waves = simulate_event_driven_waves(tasks)
         for sibling in (T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS):
             assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[sibling]
 
     def test_sibling_parallel_root_before_all_children(self):
+        """Fan-out root is dispatched before every child branch."""
         tasks = _make_sibling_parallel()
         event_waves = simulate_event_driven_waves(tasks)
         for child in (T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS, T.RELOAD_HLA_ALLELES):
             assert event_waves[T.RELOAD_PATIENT_DATA] < event_waves[child]
 
     def test_diamond_fan_in_parallel_before_convergence(self):
+        """Diamond parallel branches finish before the fan-in join task."""
         tasks = _make_diamond()
         event_waves = simulate_event_driven_waves(tasks)
         for sibling in (T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS):
             assert event_waves[sibling] < event_waves[T.RELOAD_MATCHED_TREATMENTS]
 
     def test_diamond_siblings_dispatched_same_wave(self):
+        """Diamond parallel siblings share the same dispatch wave."""
         tasks = _make_diamond()
         event_waves = simulate_event_driven_waves(tasks)
         assert event_waves[T.RELOAD_SOMATIC_MUTATIONS] == event_waves[T.RELOAD_GERMLINE_MUTATIONS]
 
     def test_sibling_parallel_all_children_same_wave(self):
+        """All fan-out children are dispatched in the same wave."""
         tasks = _make_sibling_parallel()
         event_waves = simulate_event_driven_waves(tasks)
         children = [T.RELOAD_SOMATIC_MUTATIONS, T.RELOAD_GERMLINE_MUTATIONS, T.RELOAD_HLA_ALLELES]
